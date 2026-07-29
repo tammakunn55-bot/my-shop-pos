@@ -2,7 +2,7 @@
 <html lang="th">
   <head>
     <meta charset="UTF-8">
-    <title>Smart POS Pro V6.50 - Production Edition</title>
+    <title>Smart POS Pro V7.00 - Enterprise Edition</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,6 +15,13 @@
     <link rel="stylesheet" href="style.css">
   </head>
   <body class="bg-slate-50 text-slate-900 min-h-screen">
+    <!-- STARTUP SYNC SPLASH -->
+    <div id="sync-splash-screen" style="position:fixed;inset:0;z-index:99999;background:#4f46e5;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:'Sarabun',sans-serif;">
+      <div style="width:44px;height:44px;border:4px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:sync-spin 0.8s linear infinite;"></div>
+      <p style="margin-top:16px;font-weight:700;font-size:13px;">กำลังตรวจสอบข้อมูลล่าสุดและโหลดระบบป้องกัน...</p>
+      <style>@keyframes sync-spin { to { transform: rotate(360deg); } }</style>
+    </div>
+
     <!-- HTTPS Warning Notification -->
     <div id="https-warning-banner" class="bg-rose-600 text-white text-center py-2 px-4 text-xs font-bold hidden no-print">
       ⚠️ ระบบกล้องสแกนบาร์โค้ดจะไม่ทำงานหากใช้งานผ่าน HTTP แบบไม่มีระบบรักษาความปลอดภัย กรุณาติดตั้ง SSL (HTTPS) บนเซิร์ฟเวอร์จริง
@@ -64,7 +71,8 @@
       <div class="bg-white w-full max-w-xs rounded-[2.5rem] p-8 shadow-2xl fade-in text-center">
         <div class="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto text-2xl mb-4">🔒</div>
         <h3 class="text-xl font-extrabold text-slate-800 mb-1">ยืนยันตัวตนผู้จัดการ</h3>
-        <p class="text-xs text-slate-400 mb-5">กรอก PIN 4 หลักเพื่อดำเนินการ</p>
+        <p class="text-xs text-slate-400 mb-3">กรอก PIN 4 หลักเพื่อดำเนินการ</p>
+        <select id="mgr-user-select" class="hidden w-full border-2 border-slate-200 rounded-2xl py-2.5 px-3 text-xs font-bold outline-none mb-3 text-slate-700"></select>
         <input type="password" id="mgr-pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*"
                class="w-full border-2 border-slate-200 rounded-2xl py-4 px-4 text-center text-2xl font-black tracking-[1rem] outline-none focus:border-indigo-400 mb-3"
                placeholder="••••"
@@ -82,8 +90,9 @@
       <div class="mb-8 text-center fade-in">
         <div class="text-8xl mb-4">💎</div>
         <h1 class="text-4xl font-extrabold tracking-tight text-indigo-400">Smart POS Pro</h1>
-        <p class="opacity-50 tracking-widest text-xs mt-2 uppercase">V6.50 Production Edition</p>
+        <p class="opacity-50 tracking-widest text-xs mt-2 uppercase">V7.00 Enterprise Edition</p>
         <p id="device-id-badge" class="mt-4 text-xs font-mono bg-white/10 px-3 py-1 rounded-full inline-block text-indigo-200 border border-white/10">DEVICE: ---</p>
+        <p id="supabase-sync-badge" class="mt-2 text-[10px] font-bold text-indigo-300">⚪ ยังไม่เคยซิงค์</p>
       </div>
       <p class="text-slate-400 text-sm mb-6 tracking-wide">ใส่ PIN เพื่อเข้าใช้งาน (ค่าเริ่มต้น: 1234)</p>
       <div id="pin-display-area" class="flex gap-8 mb-4 h-14 items-center">
@@ -169,7 +178,7 @@
       
       <!-- VIEW: STOCK -->
       <section id="view-stock" class="view-content hidden fade-in">
-        <div class="grid grid-cols-3 sm:grid-cols-9 gap-1.5 mb-4 text-center text-slate-800">
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-4 text-center text-slate-800">
           <button onclick="window.addNewProductRow()" class="bg-indigo-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">➕</span>เพิ่มสินค้าใหม่</button>
           <button onclick="window.toggleColumnPanel()" class="bg-purple-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
@@ -182,12 +191,6 @@
             <span class="text-sm">⚡</span>นำเข้าด่วน</button>
           <button onclick="window.exportExcel()" class="bg-teal-500 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">📊</span>Excel</button>
-          <button onclick="window.exportDatabase()" class="bg-slate-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
-            <span class="text-sm">📤</span>Backup</button>
-          <button onclick="window.openImportDatabaseModal()" class="bg-sky-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
-            <span class="text-sm">📥</span>Restore</button>
-          <button onclick="window.archiveOldBills()" class="bg-orange-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
-            <span class="text-sm">🗄️</span>เก็บถาวรบิลเก่า</button>
         </div>
 
         <div id="column-panel" class="hidden bg-white border border-indigo-200 rounded-2xl shadow-xl p-4 mb-4">
@@ -661,93 +664,162 @@
           <h3 class="text-2xl font-bold text-slate-800">⚙️ ตั้งค่าระบบ</h3>
           <button onclick="window.closeModal('modal-settings')" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-full font-bold w-8 h-8 flex items-center justify-center btn-touch">✕</button>
         </div>
-        <div class="space-y-4 text-xs sm:text-sm text-slate-700">
-          
-          <!-- GOOGLE SHEETS CONNECTOR -->
-          <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
-            <h4 class="text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1">📊 ระบบซิงค์ข้อมูล Google Sheets</h4>
-            <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">กรอก URL ของ Google Apps Script Web App เพื่อบันทึกข้อมูลยอดขายแบบเรียลไทม์</p>
-            <input type="text" id="setting-sheets-url" class="w-full bg-white border border-emerald-300 rounded-xl py-2 px-3 text-[11px] font-mono outline-none text-slate-800" placeholder="https://script.google.com/macros/s/.../exec">
-            <div class="flex gap-2 mt-2">
-              <button onclick="window.testSheetsIntegration()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[10px] btn-touch">ทดสอบส่งข้อมูล</button>
-              <button onclick="window.manualSheetsSyncAll()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[10px] btn-touch flex items-center justify-center gap-1">
-                📤 ซิงค์ค้างส่ง (<span id="sheets-pending-count">0</span>)
-              </button>
+        <div class="space-y-3 text-xs sm:text-sm text-slate-700">
+
+          <!-- ================= 0. GETTING STARTED GUIDE (new stores start here) ================= -->
+          <details class="bg-amber-50 rounded-2xl border-2 border-amber-300 overflow-hidden">
+            <summary class="p-4 font-bold text-amber-800 cursor-pointer text-xs flex items-center gap-1">🚀 เริ่มต้นใช้งาน (สำหรับร้านที่เพิ่งติดตั้ง)</summary>
+            <div class="p-4 pt-0">
+              <ol class="space-y-3 text-[11px] text-slate-700 leading-relaxed">
+                <li class="flex gap-2"><b class="text-amber-700 flex-shrink-0">1.</b><span><b>ข้อมูลร้านค้า</b> — เปิดหัวข้อ "🏪 ข้อมูลร้านค้า" ด้านล่าง กรอกชื่อร้าน ที่อยู่ เบอร์พร้อมเพย์ให้ครบ (ใช้พิมพ์หัวบิล)</span></li>
+                <li class="flex gap-2"><b class="text-amber-700 flex-shrink-0">2.</b><span><b>ตั้ง PIN เจ้าของร้าน</b> — เปิดหัวข้อ "👥 ผู้ใช้งานและความปลอดภัย" ตั้ง PIN 4 หลักไว้ล็อกหน้าจอและป้องกันการแก้ไขข้อมูลสำคัญ (ถ้ายังไม่ตั้ง ใครก็เปิดแก้ข้อมูลได้ทุกอย่าง)</span></li>
+                <li class="flex gap-2"><b class="text-amber-700 flex-shrink-0">3.</b><span><b>เพิ่มคนอื่นในครอบครัว/พนักงาน (ถ้ามี)</b> — ในหัวข้อเดียวกัน กด "เปิดหน้าจัดการผู้ใช้งาน" เพื่อให้แต่ละคนมี PIN ของตัวเอง ระบบจะบันทึกไว้ว่าใครทำรายการอะไร — <u>ถ้าใช้คนเดียว ข้ามขั้นตอนนี้ได้เลย</u> ไม่จำเป็นต้องสร้างผู้ใช้งานเพิ่ม PIN หลักก็ใช้งานได้ครบ</span></li>
+                <li class="flex gap-2"><b class="text-amber-700 flex-shrink-0">4.</b><span><b>เพิ่มสินค้า</b> — ไปที่หน้า "คลัง" กด "เพิ่มสินค้าใหม่" ทีละชิ้น หรือถ้ามีสินค้าเยอะ ใช้ปุ่มนำเข้าจากไฟล์ Excel/CSV แทน (ประหยัดเวลากว่ามาก)</span></li>
+                <li class="flex gap-2"><b class="text-amber-700 flex-shrink-0">5.</b><span><b>เชื่อมต่อ Supabase (ไม่บังคับ — ใส่แค่ตอนใช้หลายเครื่อง)</b> — ถ้าจะเปิดร้านจากมากกว่า 1 เครื่อง/เบราว์เซอร์ ให้เปิดหัวข้อ "🗄️ ฐานข้อมูลและการซิงค์ข้อมูล" กรอก Project URL และ anon key จาก Supabase แล้วกด "บันทึกและเชื่อมต่อ" — ถ้าเปิดจากเครื่องเดียวตลอด ข้ามได้เลย</span></li>
+                <li class="flex gap-2"><b class="text-amber-700 flex-shrink-0">6.</b><span><b>เริ่มขายได้เลย</b> — กลับไปหน้า "ขาย" เปิดกะ (ถ้ายังไม่เปิด) แล้วเริ่มขายสินค้าได้ทันที</span></li>
+              </ol>
+              <div class="bg-white p-3 rounded-xl border border-amber-200 mt-3 text-[10px] text-slate-500 leading-relaxed">
+                💡 <b>สรุปสั้นๆ:</b> ต้องทำแค่ข้อ 1, 2, 4, 6 เท่านั้นถึงจะขายได้ ข้อ 3 กับ 5 เป็นแค่ตัวเลือกเสริมสำหรับร้านที่มีหลายคน/หลายเครื่อง ไม่จำเป็นสำหรับร้านคนเดียวเครื่องเดียว
+              </div>
             </div>
-            <div class="border-t border-emerald-200 mt-3 pt-3">
-              <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">ซิงค์ฐานข้อมูลทั้งหมด (สินค้าหลัก ตัวเลือกสินค้า/ขนาด หน่วยย่อย/แบ่งขาย หมวดหมู่ ลูกค้า ซัพพลายเออร์ บิลขาย รายการขาย กะการทำงาน ใบสั่งซื้อ รายการสั่งซื้อ บัญชีรายรับรายจ่าย) เป็น 12 ตารางแยกกันใน Google Sheets เดียวกัน — เขียนทับข้อมูลเดิมทั้งหมดให้ตรงกับระบบ POS ปัจจุบัน (รูปภาพสินค้าจะแสดงเป็นภาพจริงในชีตด้วย ไม่ใช่แค่ลิงก์)</p>
-              <button onclick="window.syncFullDatabaseToSheets()" class="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-[10px] btn-touch">🗄️ ซิงค์ฐานข้อมูลทั้งหมด (12 ตาราง)</button>
+          </details>
+
+          <!-- ================= 1. STORE INFO (open by default — most commonly edited) ================= -->
+          <details open class="bg-slate-50 rounded-2xl border overflow-hidden">
+            <summary class="p-4 font-bold text-slate-700 cursor-pointer text-xs flex items-center gap-1">🏪 ข้อมูลร้านค้า</summary>
+            <div class="p-4 pt-0 space-y-3">
+              <div>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">ชื่อร้านค้า</label>
+                <input type="text" id="setting-store-name" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-sm outline-none text-slate-800" placeholder="ชื่อร้าน">
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">ที่อยู่ร้านค้า (พิมพ์หัวบิล)</label>
+                <textarea id="setting-store-address" rows="2" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-xs outline-none text-slate-800" placeholder="ที่อยู่"></textarea>
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">เบอร์พร้อมเพย์</label>
+                <input type="text" id="setting-promptpay-id" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-sm outline-none text-slate-800" placeholder="พร้อมเพย์">
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">ชื่อผู้เสียภาษี (บุคคลธรรมดา)</label>
+                <input type="text" id="setting-tax-name" class="w-full border rounded-xl py-2.5 px-4 text-xs font-bold outline-none text-slate-800" placeholder="ผู้เสียภาษี">
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">เลขประจำตัวผู้เสียภาษี 13 หลัก</label>
+                <input type="text" id="setting-tax-id" class="w-full border rounded-xl py-2.5 px-4 text-xs font-bold outline-none text-slate-800" placeholder="เลขผู้เสียภาษี">
+              </div>
+              <button onclick="window.saveSettings()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md btn-touch text-sm">บันทึกข้อมูลร้านค้า</button>
             </div>
-          </div>
+          </details>
 
-          <!-- SUPABASE CONNECTOR -->
-          <div class="bg-teal-50 p-4 rounded-2xl border border-teal-200">
-            <h4 class="text-xs font-bold text-teal-800 mb-1 flex items-center gap-1">🗄️ ฐานข้อมูล Supabase</h4>
-            <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">ซิงค์สินค้า/ขนาด/หน่วยแบ่งขาย/หมวดหมู่ไป Supabase (Postgres) — ใช้เป็นฐานข้อมูลสำรองที่ query/ดูรูปภาพได้จริง แยกจาก Google Sheets</p>
-            <button onclick="window.syncProductsToSupabase()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-[10px] btn-touch">🗄️ ซิงค์สินค้าไป Supabase</button>
-          </div>
+          <!-- ================= 2. USERS & SECURITY (everyone-related settings, one place) ================= -->
+          <details class="bg-violet-50 rounded-2xl border border-violet-200 overflow-hidden">
+            <summary class="p-4 font-bold text-violet-800 cursor-pointer text-xs flex items-center gap-1">👥 ผู้ใช้งานและความปลอดภัย</summary>
+            <div class="p-4 pt-0 space-y-3">
 
-          <!-- DATABASE HEALTH & AUDIT LOG -->
-          <div class="bg-sky-50 p-4 rounded-2xl border border-sky-200">
-            <h4 class="text-xs font-bold text-sky-800 mb-1 flex items-center gap-1">🩺 สถานะฐานข้อมูล (DB Health)</h4>
-            <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">ตรวจสอบความสมบูรณ์ของฐานข้อมูล คะแนนสุขภาพ ประวัติการทำรายการ (audit log) และซ่อมแซมอัตโนมัติ</p>
-            <button onclick="window.openDbHealthModal()" class="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold text-xs btn-touch">
-              🩺 เปิดแผงควบคุมฐานข้อมูล
-            </button>
-          </div>
+              <div class="bg-white p-3 rounded-xl border border-violet-100">
+                <p class="text-[10px] text-slate-500 mb-2 leading-relaxed">
+                  <b>โครงสร้างสิทธิ์:</b> PIN หลักของร้าน (ตั้งด้านล่าง) = <b>เจ้าของร้าน</b> โดยอัตโนมัติ
+                  ไม่ต้องสร้างผู้ใช้งานชื่อ "เจ้าของ" ซ้ำ — ปุ่มด้านล่างนี้ใช้เพิ่มเฉพาะ<b>คนอื่น</b> (พนักงาน/สมาชิก
+                  ครอบครัว) ที่อยากให้มี PIN ของตัวเอง เพื่อให้ระบบบันทึกได้ว่าใครทำรายการอะไร (ดูได้ที่ Audit Log)
+                </p>
+                <button onclick="window.openUserManagerModal()" class="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-xs btn-touch">
+                  👥 เปิดหน้าจัดการผู้ใช้งาน (พนักงาน/สมาชิก)
+                </button>
+              </div>
 
-          <!-- CLEAR DATA / RESET SYSTEM -->
-          <div class="bg-rose-50 p-4 rounded-2xl border-2 border-rose-300">
-            <h4 class="text-xs font-bold text-rose-800 mb-1 flex items-center gap-1">🗑️ ล้างข้อมูล / รีเซ็ตระบบ</h4>
-            <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">การกระทำนี้ไม่สามารถย้อนกลับได้ ระบบจะดาวน์โหลดไฟล์สำรองข้อมูลปัจจุบันให้อัตโนมัติก่อนดำเนินการเสมอ</p>
-            <div class="flex gap-2">
-              <button onclick="window.openClearProductsModal()" class="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-[10px] btn-touch">🗑️ ล้างข้อมูลสินค้าทั้งหมด</button>
-              <button onclick="window.openFullResetModal()" class="flex-1 py-2.5 bg-rose-800 hover:bg-rose-900 text-white rounded-xl font-bold text-[10px] btn-touch">☠️ รีเซ็ตระบบทั้งหมด</button>
+              <div class="bg-white p-3 rounded-xl border border-violet-100">
+                <h4 class="text-xs font-bold text-slate-700 mb-1">🔒 เปลี่ยนรหัส PIN เจ้าของร้าน</h4>
+                <input type="password" id="setting-pin-current" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="w-full border rounded-xl py-2 px-4 text-xs font-bold mb-2 outline-none text-slate-800" placeholder="PIN ปัจจุบัน">
+                <input type="password" id="setting-pin-new" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="w-full border rounded-xl py-2 px-4 text-xs font-bold mb-2 outline-none text-slate-800" placeholder="PIN ใหม่ (ตัวเลข 4 หลัก)">
+                <input type="password" id="setting-pin-confirm" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="w-full border rounded-xl py-2 px-4 text-xs font-bold outline-none text-slate-800" placeholder="ยืนยัน PIN">
+                <button onclick="window.changePinFromSettings()" class="w-full py-2.5 mt-2 bg-rose-600 text-white rounded-xl font-bold btn-touch text-xs">เปลี่ยน PIN เจ้าของร้าน</button>
+              </div>
+
+              <div class="bg-white p-3 rounded-xl border border-violet-100">
+                <h4 class="text-xs font-bold text-amber-800 mb-1">🔓 โหมดผู้จัดการ (ไม่ต้องใส่ PIN ซ้ำ)</h4>
+                <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">ใส่ PIN ถูกครั้งเดียว ไม่ต้องพิมพ์ซ้ำสำหรับการแก้ไขข้อมูลสำคัญในช่วงเวลาที่กำหนด (ยังต้องกดยืนยันทุกครั้ง) ล็อกเองได้ทันทีที่ไอคอน 🔓 มุมขวาบน</p>
+                <select id="setting-mgr-session-minutes" class="w-full bg-white border border-amber-300 rounded-xl py-2 px-3 text-xs font-bold outline-none text-slate-800">
+                  <option value="0">ต้องใส่ PIN ทุกครั้ง (ปลอดภัยสูงสุด)</option>
+                  <option value="5">ไม่ถาม PIN ซ้ำ 5 นาที</option>
+                  <option value="15">ไม่ถาม PIN ซ้ำ 15 นาที</option>
+                  <option value="30">ไม่ถาม PIN ซ้ำ 30 นาที</option>
+                  <option value="60">ไม่ถาม PIN ซ้ำ 60 นาที</option>
+                </select>
+              </div>
+
+              <button onclick="window.saveSettings()" class="w-full py-3 bg-violet-700 hover:bg-violet-800 text-white rounded-2xl font-bold shadow-md btn-touch text-sm">บันทึกการตั้งค่าความปลอดภัย</button>
             </div>
-          </div>
+          </details>
 
-          <div>
-            <label class="text-xs font-bold text-slate-500 mb-1 block">ชื่อร้านค้า</label>
-            <input type="text" id="setting-store-name" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-sm outline-none text-slate-800" placeholder="ชื่อร้าน">
-          </div>
-          <div>
-            <label class="text-xs font-bold text-slate-500 mb-1 block">ที่อยู่ร้านค้า (พิมพ์หัวบิล)</label>
-            <textarea id="setting-store-address" rows="2" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-xs outline-none text-slate-800" placeholder="ที่อยู่"></textarea>
-          </div>
-          <div>
-            <label class="text-xs font-bold text-slate-500 mb-1 block">เบอร์พร้อมเพย์</label>
-            <input type="text" id="setting-promptpay-id" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-sm outline-none text-slate-800" placeholder="พร้อมเพย์">
-          </div>
-          <div>
-            <label class="text-xs font-bold text-slate-500 mb-1 block">ชื่อผู้เสียภาษี (บุคคลธรรมดา)</label>
-            <input type="text" id="setting-tax-name" class="w-full border rounded-xl py-2.5 px-4 text-xs font-bold outline-none text-slate-800" placeholder="ผู้เสียภาษี">
-          </div>
-          <div>
-            <label class="text-xs font-bold text-slate-500 mb-1 block">เลขประจำตัวผู้เสียภาษี 13 หลัก</label>
-            <input type="text" id="setting-tax-id" class="w-full border rounded-xl py-2.5 px-4 text-xs font-bold outline-none text-slate-800" placeholder="เลขผู้เสียภาษี">
-          </div>
-          
-          <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200">
-            <h4 class="text-sm font-bold text-amber-800 mb-1 flex items-center gap-1">🔓 โหมดผู้จัดการ (ไม่ต้องใส่ PIN ซ้ำ)</h4>
-            <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">เมื่อใส่ PIN ผู้จัดการถูกต้องครั้งหนึ่งแล้ว ระบบจะไม่ถาม PIN ซ้ำสำหรับการแก้ไขข้อมูลสำคัญอีกภายในระยะเวลาที่กำหนด (แต่ยังคงต้องกดยืนยันก่อนทุกครั้ง) — ระบบจะล็อกกลับอัตโนมัติเมื่อครบเวลา หรือกดล็อกเองได้ทันทีที่ไอคอน 🔓 มุมขวาบน</p>
-            <select id="setting-mgr-session-minutes" class="w-full bg-white border border-amber-300 rounded-xl py-2 px-3 text-xs font-bold outline-none text-slate-800">
-              <option value="0">ต้องใส่ PIN ทุกครั้ง (ปลอดภัยสูงสุด)</option>
-              <option value="5">ไม่ถาม PIN ซ้ำ 5 นาที</option>
-              <option value="15">ไม่ถาม PIN ซ้ำ 15 นาที</option>
-              <option value="30">ไม่ถาม PIN ซ้ำ 30 นาที</option>
-              <option value="60">ไม่ถาม PIN ซ้ำ 60 นาที</option>
-            </select>
-          </div>
+          <!-- ================= 3. DATABASE & SYNC ================= -->
+          <details class="bg-teal-50 rounded-2xl border border-teal-200 overflow-hidden">
+            <summary onclick="setTimeout(window.loadSupabaseConfigIntoForm, 0)" class="p-4 font-bold text-teal-800 cursor-pointer text-xs flex items-center gap-1">🗄️ ฐานข้อมูลและการซิงค์ข้อมูล</summary>
+            <div class="p-4 pt-0 space-y-3">
 
-          <div class="bg-rose-50 p-4 rounded-2xl border border-rose-200">
-            <h4 class="text-sm font-bold text-rose-800 mb-2">🔒 เปลี่ยนรหัส PIN (ผู้จัดการ)</h4>
-            <input type="password" id="setting-pin-current" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="w-full border rounded-xl py-2 px-4 text-xs font-bold mb-2 outline-none text-slate-800" placeholder="PIN ปัจจุบัน">
-            <input type="password" id="setting-pin-new" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="w-full border rounded-xl py-2 px-4 text-xs font-bold mb-2 outline-none text-slate-800" placeholder="PIN ใหม่ (ตัวเลข 4 หลัก)">
-            <input type="password" id="setting-pin-confirm" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="w-full border rounded-xl py-2 px-4 text-xs font-bold outline-none text-slate-800" placeholder="ยืนยัน PIN">
-            <button onclick="window.changePinFromSettings()" class="w-full py-2.5 mt-2 bg-rose-600 text-white rounded-xl font-bold btn-touch">เปลี่ยน PIN</button>
-          </div>
+              <div class="bg-white p-3 rounded-xl border border-teal-100">
+                <h4 class="text-xs font-bold text-teal-800 mb-1">การเชื่อมต่อ Supabase (ฐานข้อมูลหลัก)</h4>
+                <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">
+                  <b>ซิงค์อัตโนมัติอยู่แล้ว</b> ทุกการเปลี่ยนแปลงในเครื่องนี้ส่งขึ้น Supabase เองในเบื้องหลัง
+                  และทุกครั้งที่เปิดแอปจะดึงข้อมูลล่าสุดมาอัตโนมัติก่อนแสดงหน้าจอ
+                </p>
+                <label class="text-[10px] font-bold text-slate-500 mb-1 block">Project URL</label>
+                <input type="text" id="supabase-config-url" class="w-full bg-white border border-teal-300 rounded-xl py-2 px-3 text-[11px] font-mono outline-none text-slate-800 mb-2" placeholder="https://xxxxx.supabase.co">
+                <label class="text-[10px] font-bold text-slate-500 mb-1 block">anon public key</label>
+                <input type="text" id="supabase-config-key" class="w-full bg-white border border-teal-300 rounded-xl py-2 px-3 text-[11px] font-mono outline-none text-slate-800 mb-2" placeholder="eyJ...">
+                <p class="text-[9px] text-amber-600 mb-2">⚠️ ใช้ค่า anon public key เท่านั้น ห้ามใช้ service_role key ที่นี่</p>
+                <button onclick="window.saveSupabaseConfig()" class="w-full py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold text-[10px] btn-touch mb-2">💾 บันทึกและเชื่อมต่อโปรเจกต์นี้</button>
+                <button onclick="window.forceSyncNow()" class="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-[10px] btn-touch">🔄 บังคับซิงค์ตอนนี้ (ไม่ต้องรอ)</button>
+              </div>
+
+              <!-- ================= ENTERPRISE TOOLS (NEW) ================= -->
+              <div class="bg-white p-3 rounded-xl border border-indigo-200">
+                <h4 class="text-xs font-bold text-indigo-800 mb-1">🧪 เครื่องมือทดสอบ & ระบบตรวจสอบ</h4>
+                <p class="text-[9px] text-slate-500 mb-2">รัน Unit/Integration tests ตรวจสอบความสมบูรณ์ของระบบ และดู Error Logs ย้อนหลัง</p>
+                <button onclick="window.runAutoTests()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[10px] btn-touch mb-2">
+                  🧪 รันระบบทดสอบอัตโนมัติ (System Tests)
+                </button>
+                <button onclick="window.openErrorLogsModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-[10px] btn-touch">
+                  🚨 ดูประวัติข้อผิดพลาด (System Error Logs)
+                </button>
+              </div>
+
+              <div class="bg-white p-3 rounded-xl border border-teal-100">
+                <p class="text-[9px] text-slate-500 mb-2">ส่งเฉพาะ "สินค้า" ไปดู/ค้นหาตรงๆ ใน Supabase Table Editor (แยกจากการซิงค์อัตโนมัติด้านบน)</p>
+                <button onclick="window.syncProductsToSupabase()" class="w-full py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-xl font-bold text-[10px] btn-touch">ส่งสินค้าไปดูใน Table Editor</button>
+              </div>
+
+              <div class="bg-white p-3 rounded-xl border border-teal-100">
+                <h4 class="text-xs font-bold text-sky-800 mb-1">🩺 สถานะฐานข้อมูล</h4>
+                <p class="text-[9px] text-slate-500 mb-2">ตรวจสอบความสมบูรณ์ คะแนนสุขภาพ ประวัติการทำรายการ (audit log) และซ่อมแซมอัตโนมัติ</p>
+                <button onclick="window.openDbHealthModal()" class="w-full py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold text-[10px] btn-touch">เปิดแผงควบคุมฐานข้อมูล</button>
+              </div>
+
+              <div class="bg-white p-3 rounded-xl border border-teal-100">
+                <h4 class="text-xs font-bold text-emerald-800 mb-1">📊 Google Sheets (สำรองเสริม)</h4>
+                <input type="text" id="setting-sheets-url" class="w-full bg-white border border-emerald-300 rounded-xl py-2 px-3 text-[11px] font-mono outline-none text-slate-800 mb-2" placeholder="https://script.google.com/macros/s/.../exec">
+                <div class="flex gap-2 mb-2">
+                  <button onclick="window.testSheetsIntegration()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[10px] btn-touch">ทดสอบ</button>
+                  <button onclick="window.manualSheetsSyncAll()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[10px] btn-touch">ซิงค์ค้างส่ง (<span id="sheets-pending-count">0</span>)</button>
+                </div>
+                <button onclick="window.syncFullDatabaseToSheets()" class="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-[10px] btn-touch">ซิงค์ฐานข้อมูลทั้งหมด (12 ตาราง)</button>
+              </div>
+            </div>
+          </details>
+
+          <!-- ================= 4. DANGER ZONE (collapsed by default on purpose) ================= -->
+          <details class="bg-rose-50 rounded-2xl border-2 border-rose-300 overflow-hidden">
+            <summary class="p-4 font-bold text-rose-800 cursor-pointer text-xs flex items-center gap-1">⚠️ โซนอันตราย (ล้างข้อมูล/รีเซ็ต)</summary>
+            <div class="p-4 pt-0">
+              <p class="text-[9px] text-slate-500 mb-2 leading-relaxed">การกระทำนี้ไม่สามารถย้อนกลับได้ ระบบจะดาวน์โหลดไฟล์สำรองข้อมูลปัจจุบันให้อัตโนมัติก่อนดำเนินการเสมอ</p>
+              <div class="flex gap-2">
+                <button onclick="window.openClearProductsModal()" class="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-[10px] btn-touch">🗑️ ล้างข้อมูลสินค้าทั้งหมด</button>
+                <button onclick="window.openFullResetModal()" class="flex-1 py-2.5 bg-rose-800 hover:bg-rose-900 text-white rounded-xl font-bold text-[10px] btn-touch">☠️ รีเซ็ตระบบทั้งหมด</button>
+              </div>
+            </div>
+          </details>
+
         </div>
-        <button onclick="window.saveSettings()" class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md mt-6 btn-touch text-sm">บันทึกตั้งค่า</button>
       </div>
     </div>
 
@@ -775,6 +847,35 @@
           <button onclick="window.exportAuditLog()" class="flex-1 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-[10px] btn-touch">📥 ส่งออกเป็น JSON</button>
         </div>
         <div id="audit-log-list" class="space-y-2 text-[11px] text-slate-700"></div>
+      </div>
+    </div>
+
+    <!-- USER MANAGER MODAL -->
+    <div id="modal-user-manager" class="fixed inset-0 z-[160] bg-slate-900/80 flex items-center justify-center p-4 hidden">
+      <div class="bg-white w-full max-w-lg rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="flex justify-between items-center mb-4 border-b pb-4">
+          <h3 class="text-2xl font-bold text-slate-800">👥 จัดการผู้ใช้งาน</h3>
+          <button onclick="window.closeModal('modal-user-manager')" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-full font-bold w-8 h-8 flex items-center justify-center btn-touch">✕</button>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 text-[10px] text-amber-800 leading-relaxed">
+          💡 <b>PIN หลักของร้าน (ตั้งที่ ⚙️ ตั้งค่า > เปลี่ยนรหัส PIN) คือ "เจ้าของร้าน" อยู่แล้วโดยอัตโนมัติ</b> ไม่ต้องเพิ่มผู้ใช้งานชื่อ "เจ้าของ" ซ้ำที่นี่ — หน้านี้ใช้เพิ่มเฉพาะ<b>คนอื่นที่อยากให้มี PIN ของตัวเอง</b> (พนักงาน/สมาชิกครอบครัว) เพื่อให้ระบบบันทึกได้ว่าใครทำรายการอะไร
+        </div>
+
+        <div class="bg-slate-50 p-4 rounded-2xl border mb-4">
+          <h4 id="user-form-title" class="text-xs font-bold text-slate-500 mb-3">เพิ่มผู้ใช้งานใหม่</h4>
+          <input type="hidden" id="edit-user-id">
+          <div class="space-y-2">
+            <input type="text" id="user-name" placeholder="ชื่อผู้ใช้งาน (เช่น ลูกชาย, พนักงาน A)" class="w-full bg-white border rounded-xl py-2.5 px-3 text-xs outline-none text-slate-800">
+            <input type="password" id="user-pin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="PIN 4 หลัก" class="w-full bg-white border rounded-xl py-2.5 px-3 text-xs outline-none text-slate-800 tracking-widest">
+            <div class="flex gap-2">
+              <button onclick="window.openUserForm(null)" class="flex-1 py-2.5 bg-slate-200 text-slate-600 rounded-xl font-bold text-[10px] btn-touch">ล้างฟอร์ม</button>
+              <button onclick="window.saveUser()" class="flex-1 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-[10px] btn-touch">บันทึกผู้ใช้งาน</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="user-manager-list" class="space-y-2"></div>
       </div>
     </div>
 
@@ -1083,10 +1184,11 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supabase-integration.js"></script>
     <script src="js/part1.js"></script>
     <script src="js/part2.js"></script>
     <script src="js/part3.js"></script>
+    <script src="js/supabase-integration.js"></script>
+    <script src="js/part4.js"></script>
   </body>
 </html>
 
