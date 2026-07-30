@@ -956,7 +956,7 @@
         const desc = document.getElementById('v-select-desc');
         const emoji = document.getElementById('variant-modal-emoji');
         if (title) title.innerText = p.name;
-        if (desc) desc.innerText = "เลือกขนาดสินค้าหรือแบบการแบ่งขายสำหรับ " + p.name;
+        if (desc) desc.innerText = "เลือกขนาดสินค้าสำหรับ " + p.name;
         if (emoji) emoji.innerText = p.image || "🏷️";
 
         const container = document.getElementById('v-select-list');
@@ -964,31 +964,17 @@
         let html = "";
 
         p.variants.forEach(v => {
+          const hasFractions = v.fractions && v.fractions.length > 0;
           html += `
-            <div onclick="window.addUnifiedToCart('${escapeHTML(p.id)}', '${escapeHTML(v.id)}', null); window.closeModal('modal-select-variant');" 
+            <div onclick="window.onVariantClick('${escapeHTML(p.id)}', '${escapeHTML(v.id)}')" 
                  class="p-3 border-2 border-slate-100 hover:border-indigo-500 rounded-2xl cursor-pointer bg-slate-50 transition active:scale-95 flex justify-between items-center mb-2">
               <div>
-                <b class="text-xs text-slate-800">${escapeHTML(v.sizeName)} (เต็มหน่วย)</b>
-                <p class="text-[10px] text-slate-400 mt-0.5">คงเหลือคลัง: ${v.stock} ชิ้น</p>
+                <b class="text-xs text-slate-800">${escapeHTML(v.sizeName)}</b>
+                <p class="text-[10px] text-slate-400 mt-0.5">คงเหลือคลัง: ${v.stock} ชิ้น${hasFractions ? ' · มีตัวเลือกแบ่งขาย' : ''}</p>
               </div>
-              <span class="text-xs font-bold text-indigo-600">${formatMoney(v.price)}</span>
+              <span class="text-xs font-bold text-indigo-600">${hasFractions ? 'เลือกหน่วย ›' : formatMoney(v.price)}</span>
             </div>
           `;
-
-          if(v.fractions && v.fractions.length > 0) {
-            v.fractions.forEach(f => {
-              html += `
-                <div onclick="window.addUnifiedToCart('${escapeHTML(p.id)}', '${escapeHTML(v.id)}', '${escapeHTML(f.id)}'); window.closeModal('modal-select-variant');" 
-                     class="p-3 border-2 border-slate-100 hover:border-emerald-500 rounded-2xl cursor-pointer bg-white transition active:scale-95 flex justify-between items-center ml-4 border-dashed mb-2">
-                  <div>
-                    <b class="text-xs text-slate-600">✂️ ${escapeHTML(v.sizeName)} - ${escapeHTML(f.fractionName)}</b>
-                    <p class="text-[10px] text-slate-400 mt-0.5">ใช้อัตราส่วน: 1 ชิ้นใหญ่ ตัดได้ ${f.fractionMultiplier} ชิ้นย่อย</p>
-                  </div>
-                  <span class="text-xs font-bold text-emerald-600">${formatMoney(f.fractionPrice)}</span>
-                </div>
-              `;
-            });
-          }
         });
 
         container.innerHTML = html;
@@ -996,6 +982,82 @@
         if (modal) {
           modal.classList.remove('hidden');
           modal.classList.add('flex');
+        }
+      };
+
+      // ตัวแปรจำค่าล่าสุดไว้ ใช้ตอนกดปุ่ม "ย้อนกลับ" จาก popup เลือกหน่วยไปยัง popup เลือกขนาด
+      let lastVariantModalProductId = null;
+
+      window.onVariantClick = function(productId, variantId) {
+        const p = db.products[productId];
+        if (!p) return;
+        const v = (p.variants || []).find(x => x.id === variantId);
+        if (!v) return;
+
+        if (!v.fractions || v.fractions.length === 0) {
+          // ไม่มีตัวเลือกแบ่งขาย เพิ่มลงตะกร้าทันทีแบบเต็มหน่วย
+          window.addUnifiedToCart(p.id, v.id, null);
+          window.closeModal('modal-select-variant');
+          return;
+        }
+
+        // มีตัวเลือกแบ่งขาย เปิด popup ที่สองให้เลือกหน่วย
+        lastVariantModalProductId = productId;
+        window.closeModal('modal-select-variant');
+        window.openSelectUnitModal(productId, variantId);
+      };
+
+      window.openSelectUnitModal = function(productId, variantId) {
+        const p = db.products[productId];
+        if (!p) return;
+        const v = (p.variants || []).find(x => x.id === variantId);
+        if (!v) return;
+
+        const title = document.getElementById('u-select-title');
+        const desc = document.getElementById('u-select-desc');
+        const emoji = document.getElementById('unit-modal-emoji');
+        if (title) title.innerText = p.name + ' — ' + v.sizeName;
+        if (desc) desc.innerText = "เลือกว่าต้องการขายเต็มหน่วย หรือแบ่งขายย่อย";
+        if (emoji) emoji.innerText = p.image || "✂️";
+
+        const container = document.getElementById('u-select-list');
+        if (!container) return;
+        let html = `
+          <div onclick="window.addUnifiedToCart('${escapeHTML(p.id)}', '${escapeHTML(v.id)}', null); window.closeModal('modal-select-unit');" 
+               class="p-3 border-2 border-slate-100 hover:border-indigo-500 rounded-2xl cursor-pointer bg-slate-50 transition active:scale-95 flex justify-between items-center mb-2">
+            <div>
+              <b class="text-xs text-slate-800">เต็มหน่วย (${escapeHTML(v.sizeName)})</b>
+              <p class="text-[10px] text-slate-400 mt-0.5">คงเหลือคลัง: ${v.stock} ชิ้น</p>
+            </div>
+            <span class="text-xs font-bold text-indigo-600">${formatMoney(v.price)}</span>
+          </div>
+        `;
+
+        v.fractions.forEach(f => {
+          html += `
+            <div onclick="window.addUnifiedToCart('${escapeHTML(p.id)}', '${escapeHTML(v.id)}', '${escapeHTML(f.id)}'); window.closeModal('modal-select-unit');" 
+                 class="p-3 border-2 border-slate-100 hover:border-emerald-500 rounded-2xl cursor-pointer bg-white transition active:scale-95 flex justify-between items-center mb-2">
+              <div>
+                <b class="text-xs text-slate-600">✂️ ${escapeHTML(f.fractionName)}</b>
+                <p class="text-[10px] text-slate-400 mt-0.5">ใช้อัตราส่วน: 1 ${escapeHTML(v.sizeName)} ตัดได้ ${f.fractionMultiplier} ${escapeHTML(f.fractionName)}</p>
+              </div>
+              <span class="text-xs font-bold text-emerald-600">${formatMoney(f.fractionPrice)}</span>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html;
+        const modal = document.getElementById('modal-select-unit');
+        if (modal) {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+      };
+
+      window.backToVariantModal = function() {
+        window.closeModal('modal-select-unit');
+        if (lastVariantModalProductId) {
+          window.openSelectVariantModal(lastVariantModalProductId);
         }
       };
 
