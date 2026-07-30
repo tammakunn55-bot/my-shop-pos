@@ -605,6 +605,20 @@
       </div>
     </div>
 
+    <!-- SELECT UNIT (FRACTION) MODAL — shown after a size is picked, only for products that support แบ่งขาย -->
+    <div id="modal-select-unit" class="fixed inset-0 z-[111] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+      <div class="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl fade-in flex flex-col">
+        <div id="unit-modal-emoji" class="text-6xl text-center mb-3">✂️</div>
+        <h3 id="u-select-title" class="text-2xl font-black text-slate-800 text-center tracking-tight mb-1">เลือกหน่วยขาย</h3>
+        <p id="u-select-desc" class="text-xs text-slate-400 text-center mb-6">เลือกว่าต้องการขายเต็มจำนวน หรือแบ่งขายย่อย</p>
+        <div id="u-select-list" class="space-y-3.5 max-h-96 overflow-y-auto no-scrollbar pr-1"></div>
+        <div class="flex gap-3 mt-6">
+          <button onclick="window.backToVariantModal()" class="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl font-bold btn-touch transition-colors">‹ ย้อนกลับ</button>
+          <button onclick="window.closeModal('modal-select-unit')" class="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl font-bold btn-touch transition-colors">ยกเลิก</button>
+        </div>
+      </div>
+    </div>
+
     <!-- REFUND MODAL -->
     <div id="modal-refund" class="fixed inset-0 z-[160] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden">
       <div class="bg-white w-full max-w-2xl rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[95vh] overflow-y-auto no-scrollbar">
