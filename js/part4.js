@@ -1,8 +1,8 @@
 // ==========================================
 // SMART POS PRO — PART 4 of 4 (plain <script>, no build step)
 // Enterprise Upgrade Suite:
-// 1. Atomic Transaction Engine with Auto-Rollback
-// 2. Lock & Conflict Resolution (Optimistic Concurrency Control for Multi-Device)
+// 1. Atomic Transaction Engine with Auto-Rollback & External Callbacks
+// 2. Lock & Conflict Resolution (Moved to supabase-integration.js)
 // 3. Emergency Auto Recovery & Cart Draft Persistence
 // 4. In-Browser Automated System Testing Suite (Unit/Integration)
 // 5. Global Error Logging, Monitoring & Remote Telemetry
@@ -12,11 +12,10 @@
   'use strict';
 
   // ==========================================
-  // 1. ATOMIC TRANSACTION ENGINE WITH AUTO-ROLLBACK & UI RESTORE (ข้อ 2)
+  // 1. ATOMIC TRANSACTION ENGINE WITH AUTO-ROLLBACK & SIDE-EFFECT COMPENSATIONS
   // ==========================================
   // Guarantees that multi-step operations (e.g., checkout = stock reduction +
-  // bill creation + cash ledger update + shift update) either succeed entirely
-  // or roll back 100% cleanly without leaving corrupted state.
+  // bill creation + cash ledger update) either succeed entirely or roll back cleanly.
   window.runAtomicTransaction = async function (transactionName, operationFn) {
     if (typeof window.guardOnce === 'function' && !window.guardOnce('tx_' + transactionName, 500)) {
       return false;
@@ -25,14 +24,26 @@
     // 1. Create a deep state snapshot prior to state mutation
     const stateSnapshot = JSON.stringify(window.db);
     const cartSnapshot = JSON.stringify(window.cart || []);
+    const compensations = []; // Queue for external side-effect rollbacks (e.g., API calls)
+
+    // Hook passed into the operationFn so business logic can register an "undo" 
+    // function for any external side-effects if the transaction fails later on.
+    const registerCompensation = (undoFn) => {
+        if (typeof undoFn === 'function') {
+            compensations.push(undoFn);
+        }
+    };
 
     try {
-      // 2. Execute business logic operation
-      const result = await operationFn();
+      // 2. Execute business logic operation (pass compensation hook)
+      const result = await operationFn(registerCompensation);
 
-      // 3. On success: persist to local storage
-      if (typeof window.persist === 'function') {
-        window.persist();
+      // 3. On success: persist to local storage (use Decoupled Persist if available)
+      if (typeof window.decoupledPersist === 'function') {
+          // If transaction name gives a hint, we could pass domains. Default empty arrays syncs all registered.
+          window.decoupledPersist();
+      } else if (typeof window.persist === 'function') {
+          window.persist();
       }
 
       if (typeof window.logTransaction === 'function') {
@@ -41,22 +52,34 @@
 
       return result !== undefined ? result : true;
     } catch (error) {
-      // 4. On failure: restore snapshot completely (Rollback) & sync UI
-      try {
-        db = JSON.parse(stateSnapshot);
-        cart = JSON.parse(cartSnapshot);
-        window.db = db;
-        window.cart = cart;
+      console.error(`[Atomic System] Transaction "${transactionName}" failed. Commencing Rollback...`, error);
 
-        // เรียก renderAll(), updateShiftUI() และ updateCartUI() ทันทีเพื่อให้ UI และ Reference ของวัตถุทั้งหมดซิงค์ตรงกับข้อมูลที่ Rollback
+      // 4. On failure: Execute Compensation Callbacks (Rollback External APIs first)
+      for (let i = compensations.length - 1; i >= 0; i--) {
+          try {
+              await compensations[i]();
+          } catch (compErr) {
+              console.error(`[Atomic System] Compensation failed during rollback of ${transactionName}:`, compErr);
+          }
+      }
+
+      // 5. Restore Local Snapshot completely & sync UI
+      try {
+        const restoredDb = JSON.parse(stateSnapshot);
+        const restoredCart = JSON.parse(cartSnapshot);
+        
+        // Re-assign explicitly to global scope
+        window.db = restoredDb;
+        window.cart = restoredCart;
+        if (typeof db !== 'undefined') db = window.db;
+        if (typeof cart !== 'undefined') cart = window.cart;
+
         if (typeof window.renderAll === 'function') window.renderAll();
         if (typeof window.updateShiftUI === 'function') window.updateShiftUI();
         if (typeof window.updateCartUI === 'function') window.updateCartUI();
       } catch (rollbackErr) {
-        console.error("Critical: Rollback failed!", rollbackErr);
+        console.error("Critical: Local State Rollback failed!", rollbackErr);
       }
-
-      console.error(`[Atomic System] Transaction "${transactionName}" failed and was rolled back:`, error);
 
       if (typeof window.logSystemError === 'function') {
         window.logSystemError('ATOMIC_ROLLBACK', `Transaction ${transactionName}: ${error.message}`, error.stack);
@@ -76,86 +99,7 @@
 
 
   // ==========================================
-  // 2. LOCK & CONFLICT RESOLUTION (OCC)
-  // ==========================================
-  // Prevents lost updates when multiple devices edit or record transactions.
-  // Checks Cloud timestamps before overwriting local db state.
-  window.pushFullStateToSupabaseSafe = async function () {
-    const LAST_SYNCED_KEY = 'pos_last_synced_at';
-    const POS_STATE_ROW_ID = 'main';
-
-    try {
-      if (typeof window.getSupabaseClient !== 'function') return;
-
-      const client = window.getSupabaseClient();
-      if (!client) return;
-
-      const lastKnownSync = localStorage.getItem(LAST_SYNCED_KEY);
-      const nowIso = new Date().toISOString();
-
-      // 1. Query remote cloud timestamp first
-      const { data: remoteData, error: fetchErr } = await client
-        .from('pos_state')
-        .select('updated_at')
-        .eq('id', POS_STATE_ROW_ID)
-        .maybeSingle();
-
-      if (!fetchErr && remoteData && remoteData.updated_at) {
-        const remoteTime = new Date(remoteData.updated_at).getTime();
-        const localKnownTime = lastKnownSync ? new Date(lastKnownSync).getTime() : 0;
-
-        // 2. Conflict Detected! Another device pushed newer state.
-        if (remoteTime > localKnownTime + 1000) { // 1 second threshold
-          console.warn("[Conflict Engine] Supabase has newer data. Aborting push to prevent data overwrite.");
-          
-          if (typeof window.logSystemError === 'function') {
-            window.logSystemError('SYNC_CONFLICT', `Remote updated at ${remoteData.updated_at}, local known was ${lastKnownSync}`);
-          }
-
-          if (typeof window.updateSyncStatusBadge === 'function') {
-            window.updateSyncStatusBadge('offline', null);
-          }
-
-          if (typeof window.showAlert === 'function') {
-            window.showAlert(
-              "⚠️ ตรวจพบการซิงค์ชนกัน (Data Conflict)",
-              "มีเครื่องอื่นอัปเดตข้อมูลขึ้นระบบขณะที่คุณกำลังใช้งาน กรุณากด 'ดึงข้อมูลล่าสุด' หรือรีเฟรชหน้าเว็บเพื่ออัปเดต",
-              true
-            );
-          }
-          return false;
-        }
-      }
-
-      // 3. Safe to write: proceed with upsert
-      const { error: upsertErr } = await client
-        .from('pos_state')
-        .upsert({ id: POS_STATE_ROW_ID, data: window.db, updated_at: nowIso });
-
-      if (upsertErr) throw upsertErr;
-
-      localStorage.setItem(LAST_SYNCED_KEY, nowIso);
-
-      if (typeof window.updateSyncStatusBadge === 'function') {
-        window.updateSyncStatusBadge('synced', nowIso);
-      }
-
-      return true;
-    } catch (err) {
-      console.error("[Conflict Engine] Push failed:", err);
-      if (typeof window.updateSyncStatusBadge === 'function') {
-        window.updateSyncStatusBadge('offline', null);
-      }
-      if (typeof window.logSystemError === 'function') {
-        window.logSystemError('PUSH_FAILED', err.message, err.stack);
-      }
-      return false;
-    }
-  };
-
-
-  // ==========================================
-  // 3. AUTO RECOVERY & CART DRAFT SYSTEM (ข้อ 1)
+  // 3. AUTO RECOVERY & CART DRAFT SYSTEM
   // ==========================================
   const CART_DRAFT_KEY = 'smart_pos_cart_draft_v1';
 
@@ -257,13 +201,21 @@
     // Test 3: Atomic Transaction Engine & Rollback
     try {
       const originalStoreName = window.db.storeName;
-      const txResult = await window.runAtomicTransaction('TEST_INTENTIONAL_FAIL', async () => {
+      let sideEffectCalled = false;
+      const txResult = await window.runAtomicTransaction('TEST_INTENTIONAL_FAIL', async (registerCompensation) => {
         window.db.storeName = "TEST_TEMP_NAME_12345";
+        
+        // Test Side-effect Compensation
+        registerCompensation(() => {
+            sideEffectCalled = true;
+        });
+
         throw new Error("Simulated Failure for Testing Rollback");
       });
 
       assert("ระบบ Atomic Transaction สามารถตรวจจับ Error ได้ถูกต้อง", txResult === false);
       assert("ระบบ Rollback คืนค่าข้อมูลกลับสมบูรณ์หลังการล้มเหลว", window.db.storeName === originalStoreName, `ชื่อร้านปัจจุบัน: ${window.db.storeName}`);
+      assert("ระบบ Rollback เรียกการชดเชย (Compensation) ภายนอกได้", sideEffectCalled === true);
     } catch (e) {
       assert("ทดสอบ Atomic Rollback Engine", false, e.message);
     }

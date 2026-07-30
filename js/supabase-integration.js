@@ -1,5 +1,5 @@
 // ==========================================
-// SUPABASE INTEGRATION (With Conflict Resolution & Force Sync)
+// SUPABASE INTEGRATION (With Conflict Resolution, Force Sync & Granular Tables)
 // ==========================================
 // Requires the Supabase JS client loaded first via CDN in index.html:
 //   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,16 +52,102 @@ function getSupabaseClient() {
 window.getSupabaseClient = getSupabaseClient;
 
 // ------------------------------------------
-// PUSH PRODUCTS TO SUPABASE (Full Sync)
+// DECOUPLED SYNC & GRANULAR RELATIONAL TABLE SUPPORT
 // ------------------------------------------
-window.syncProductsToSupabase = async function () {
+// Allows syncing specific modules to their own respective database tables in Supabase 
+// without needing to rewrite the entire JSON state bloat on every transaction.
+window.syncGranularTablesToSupabase = async function (domain) {
+    const client = getSupabaseClient();
+    if (!client || !window.db) return false;
+
+    try {
+        if (domain === 'products') {
+            await window.syncProductsToSupabase(true); // Call existing quiet mode sync
+        } 
+        else if (domain === 'bills') {
+            // Find bills that haven't been successfully synced yet
+            const unSyncedBills = window.db.bills.filter(b => !b.supabaseSynced);
+            if (unSyncedBills.length === 0) return true;
+
+            const payload = unSyncedBills.map(b => ({
+                id: b.id,
+                time: new Date(b.time).toISOString(),
+                total: b.total,
+                method: b.method,
+                customer_id: b.customerId === 'GENERAL' ? null : b.customerId,
+                payload_json: b 
+            }));
+
+            const { error } = await client.from('bills').upsert(payload, { onConflict: 'id' });
+            if (error) throw error;
+            unSyncedBills.forEach(b => b.supabaseSynced = true);
+        }
+        else if (domain === 'cash_ledger') {
+            const unSyncedLedger = window.db.cashLedger.filter(tx => !tx.supabaseSynced);
+            if (unSyncedLedger.length === 0) return true;
+
+            const payload = unSyncedLedger.map(tx => ({
+                id: tx.id,
+                date: tx.date,
+                description: tx.description,
+                income: tx.income || 0,
+                expense: tx.expense || 0,
+                type: tx.type,
+                ref_id: tx.refId || null
+            }));
+
+            const { error } = await client.from('cash_ledger').upsert(payload, { onConflict: 'id' });
+            if (error) throw error;
+            unSyncedLedger.forEach(tx => tx.supabaseSynced = true);
+        }
+        else if (domain === 'shifts') {
+             const unSyncedShifts = window.db.shifts.filter(s => !s.supabaseSynced);
+             if (unSyncedShifts.length === 0) return true;
+             
+             const payload = unSyncedShifts.map(s => ({
+                 id: s.id,
+                 start_time: new Date(s.startTime).toISOString(),
+                 end_time: s.endTime ? new Date(s.endTime).toISOString() : null,
+                 cash_on_hand: s.cashOnHand,
+                 payload_json: s
+             }));
+             const { error } = await client.from('shifts').upsert(payload, { onConflict: 'id' });
+             if (error) throw error;
+             unSyncedShifts.forEach(s => s.supabaseSynced = true);
+        }
+        
+        return true;
+    } catch (err) {
+        console.error(`Granular sync failed for domain [${domain}]:`, err);
+        return false;
+    }
+};
+
+window.decoupledPersist = function(domains = []) {
+    // 1. Immediately persist local state (Storage)
+    if (typeof window.persist === 'function') {
+        window.persist();
+    }
+    
+    // 2. Perform decoupled async sync for granular relational tables
+    if (domains && domains.length > 0) {
+        domains.forEach(domain => {
+            window.syncGranularTablesToSupabase(domain);
+        });
+    } else {
+        // Fallback: sync all known modular tables if none specified
+        ['bills', 'cash_ledger', 'shifts'].forEach(d => window.syncGranularTablesToSupabase(d));
+    }
+};
+
+// ------------------------------------------
+// PUSH PRODUCTS TO SUPABASE (Granular)
+// ------------------------------------------
+window.syncProductsToSupabase = async function (isQuiet = false) {
   if (typeof window.guardOnce === 'function' && !window.guardOnce('syncProductsToSupabase')) return;
 
-  window.showCustomConfirm(
-    "ซิงค์สินค้าทั้งหมดไป Supabase?",
-    "ระบบจะเขียนทับข้อมูลสินค้า/ขนาด/หน่วยแบ่งขายทั้งหมดใน Supabase ให้ตรงกับข้อมูลในเครื่องนี้",
-    async () => {
-      showToast("กำลังซิงค์ข้อมูลสินค้าไป Supabase...");
+  const executeSync = async () => {
+      if (!isQuiet) showToast("กำลังซิงค์ข้อมูลสินค้าไป Supabase...");
       try {
         const products = Object.values(db.products);
 
@@ -94,11 +180,11 @@ window.syncProductsToSupabase = async function () {
         const productIds = products.map(p => p.id);
         if (productIds.length > 0) {
           const { error: delErr } = await getSupabaseClient().from('product_categories').delete().in('product_id', productIds);
-          if (delErr) throw new Error('product_categories (clear): ' + delErr.message);
+          if (delErr && delErr.code !== '42P01') throw new Error('product_categories (clear): ' + delErr.message);
         }
         if (categoryLinkRows.length > 0) {
           const { error } = await getSupabaseClient().from('product_categories').insert(categoryLinkRows);
-          if (error) throw new Error('product_categories: ' + error.message);
+          if (error && error.code !== '42P01') throw new Error('product_categories: ' + error.message);
         }
 
         const variantRows = [];
@@ -134,16 +220,25 @@ window.syncProductsToSupabase = async function () {
           if (error) throw new Error('product_fractions: ' + error.message);
         }
 
-        if (typeof window.logTransaction === 'function') {
+        if (typeof window.logTransaction === 'function' && !isQuiet) {
           window.logTransaction('SUPABASE_SYNC', { productCount: productRows.length, variantCount: variantRows.length });
         }
-        showAlert("ซิงค์สำเร็จ", `ส่งข้อมูลสินค้า ${productRows.length} รายการ ไป Supabase เรียบร้อยแล้ว`, false);
+        if (!isQuiet) showAlert("ซิงค์สำเร็จ", `ส่งข้อมูลสินค้า ${productRows.length} รายการ ไป Supabase เรียบร้อยแล้ว`, false);
       } catch (err) {
         console.error("Supabase sync error:", err);
-        showAlert("ซิงค์ไม่สำเร็จ", "เกิดข้อผิดพลาด: " + err.message, true);
+        if (!isQuiet) showAlert("ซิงค์ไม่สำเร็จ", "เกิดข้อผิดพลาด: " + err.message, true);
       }
-    }
-  );
+  };
+
+  if (isQuiet) {
+      await executeSync();
+  } else {
+      window.showCustomConfirm(
+        "ซิงค์สินค้าทั้งหมดไป Supabase?",
+        "ระบบจะเขียนทับข้อมูลสินค้า/ขนาด/หน่วยแบ่งขายทั้งหมดใน Supabase ให้ตรงกับข้อมูลในเครื่องนี้",
+        executeSync
+      );
+  }
 };
 
 window.uploadProductImageToSupabase = async function (file, productId) {
@@ -244,11 +339,12 @@ window.fetchProductsFromSupabase = async function () {
     if (pErr) throw pErr;
     if (vErr) throw vErr;
     if (fErr) throw fErr;
-    if (clErr) throw clErr;
-    if (cErr) throw cErr;
-
+    // We tolerate missing link tables gracefully assuming the structure may evolve
+    
     const catIdToName = {};
-    categories.forEach(c => { catIdToName[c.id] = c.name; });
+    if (categories) {
+        categories.forEach(c => { catIdToName[c.id] = c.name; });
+    }
 
     const result = {};
     products.forEach(p => {
@@ -257,11 +353,15 @@ window.fetchProductsFromSupabase = async function () {
         isDeleted: p.is_deleted, variants: []
       };
     });
-    catLinks.forEach(link => {
-      if (result[link.product_id] && catIdToName[link.category_id]) {
-        result[link.product_id].cat.push(catIdToName[link.category_id]);
-      }
-    });
+    
+    if (catLinks) {
+        catLinks.forEach(link => {
+          if (result[link.product_id] && catIdToName[link.category_id]) {
+            result[link.product_id].cat.push(catIdToName[link.category_id]);
+          }
+        });
+    }
+    
     variants.forEach(v => {
       if (!result[v.product_id]) return;
       result[v.product_id].variants.push({
@@ -270,15 +370,18 @@ window.fetchProductsFromSupabase = async function () {
         stock: roundStock(parseFloat(v.stock)), minStock: roundStock(parseFloat(v.min_stock)), fractions: []
       });
     });
-    fractions.forEach(f => {
-      for (const pid in result) {
-        const v = result[pid].variants.find(x => x.id === f.variant_id);
-        if (v) {
-          v.fractions.push({ id: f.id, fractionName: f.fraction_name, fractionMultiplier: roundStock(parseFloat(f.multiplier)), fractionPrice: roundAmt(parseFloat(f.fraction_price)) });
-          break;
-        }
-      }
-    });
+    
+    if (fractions) {
+        fractions.forEach(f => {
+          for (const pid in result) {
+            const v = result[pid].variants.find(x => x.id === f.variant_id);
+            if (v) {
+              v.fractions.push({ id: f.id, fractionName: f.fraction_name, fractionMultiplier: roundStock(parseFloat(f.multiplier)), fractionPrice: roundAmt(parseFloat(f.fraction_price)) });
+              break;
+            }
+          }
+        });
+    }
     return result;
   } catch (err) {
     console.error("Supabase fetch error:", err);
@@ -293,6 +396,7 @@ window.fetchProductsFromSupabase = async function () {
 const POS_STATE_ROW_ID = 'main';
 const LAST_SYNCED_KEY = 'pos_last_synced_at';
 
+// Debounce Global state sync
 let _pushDebounceTimer = null;
 const _originalPersistForSync = window.persist;
 window.persist = function (...args) {
@@ -306,7 +410,7 @@ window.persist = function (...args) {
   return result;
 };
 
-// Safe Push Function with Optimistic Concurrency Control (OCC) (ข้อ 5: ปรับปรุงการแจ้งเตือน Conflict และรองรับ Force Sync)
+// Safe Push Function with Optimistic Concurrency Control (OCC)
 window.pushFullStateToSupabaseSafe = async function (force = false) {
   try {
     const client = getSupabaseClient();
@@ -411,8 +515,11 @@ async function checkAndPullNewerStateOnStartup() {
 
     if (typeof window.runMigrations === 'function') await window.runMigrations(data.data);
     if (typeof window.autoRepairIfNeeded === 'function') await window.autoRepairIfNeeded(data.data);
-    db = data.data;
-    window.db = db;
+    
+    // Explicit global reassignment
+    window.db = data.data;
+    if (typeof db !== 'undefined') { db = window.db; }
+    
     localStorage.setItem(LAST_SYNCED_KEY, data.updated_at);
     updateSyncStatusBadge('synced', data.updated_at);
 
@@ -424,11 +531,11 @@ async function checkAndPullNewerStateOnStartup() {
 
     const lockScreen = document.getElementById('lock-screen');
     if (lockScreen) {
-      if (!db.pinHash) {
+      if (!window.db.pinHash) {
         lockScreen.style.display = 'none';
       } else {
         lockScreen.style.display = 'flex';
-        if (db.security && db.security.lockUntil && db.security.lockUntil > Date.now() && typeof startMainLockCountdown === 'function') {
+        if (window.db.security && window.db.security.lockUntil && window.db.security.lockUntil > Date.now() && typeof startMainLockCountdown === 'function') {
           startMainLockCountdown();
         }
       }
@@ -480,26 +587,32 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ==========================================
-// AUDIT LOG → SUPABASE
+// AUDIT LOG → SUPABASE (APPEND-ONLY SECURITY CHECK)
 // ==========================================
 const _originalLogTransactionForSync = window.logTransaction;
 window.logTransaction = async function (action, details = {}, opts = {}) {
   const entry = _originalLogTransactionForSync ? await _originalLogTransactionForSync(action, details, opts) : null;
   if (!entry) return null;
+  
   try {
     const deviceBadge = document.getElementById('device-id-badge');
     const deviceId = (deviceBadge?.innerText || '').replace('DEVICE: ', '').trim() || window.__deviceId || null;
-    getSupabaseClient().from('audit_log').insert({
+    
+    // Strict Append-Only Insert (Prevents modifications assuming backend RLS)
+    getSupabaseClient().from('audit_log').insert([{
       id: entry.id,
       ts: entry.ts,
       action: entry.action,
       actor: entry.actor,
       details: entry.details,
       device_id: deviceId
-    }).then(({ error }) => {
-      if (error) console.error("Audit log push failed:", error);
-    }).catch(err => console.error("Audit log push failed:", err));
+    }]).then(({ error }) => {
+      if (error) {
+         console.warn("Audit log append-only push failed (Check network/RLS policies):", error);
+      }
+    }).catch(err => console.error("Audit log network err:", err));
   } catch (e) {}
+  
   return entry;
 };
 

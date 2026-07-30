@@ -231,7 +231,15 @@
 
         const isNew = !db.products[id];
         db.products[id] = { id, name, image, imageUrl, cat: cats, variants, isDeleted: false };
-        persist(); closeModal('modal-product'); showToast("บันทึกสินค้าสำเร็จ");
+        
+        // Trigger optimized persistence if available
+        if (typeof window.decoupledPersist === 'function') {
+          window.decoupledPersist(['products']);
+        } else {
+          persist();
+        }
+        
+        closeModal('modal-product'); showToast("บันทึกสินค้าสำเร็จ");
         logTransaction(isNew ? 'PRODUCT_CREATE' : 'PRODUCT_EDIT', { productId: id, name, variantCount: variants.length });
         if(activeView === 'stock') window.renderStock();
       };
@@ -243,7 +251,13 @@
         
         window.showCustomConfirm("ต้องการระงับการขายสินค้านี้?", "สินค้านี้จะไม่แสดงในหน้าหลักและหน้าระงับขายอีกต่อไป", () => {
           db.products[id].isDeleted = true;
-          persist();
+          
+          if (typeof window.decoupledPersist === 'function') {
+            window.decoupledPersist(['products']);
+          } else {
+            persist();
+          }
+
           logTransaction('PRODUCT_SUSPEND', { productId: id, name: db.products[id].name });
           closeModal('modal-product');
           window.renderStock();
@@ -252,7 +266,7 @@
       };
 
       // ==========================================
-      // STOCKS TABLE (GOOGLE-SHEET STYLE PRODUCT DATABASE) & LOW STOCK SYSTEM
+      // STOCKS TABLE (PAGINATED & GOOGLE-SHEET STYLE)
       // ==========================================
 
       // Column definitions for the spreadsheet-style product table.
@@ -284,6 +298,21 @@
       window.stockCountMode = false;
       window.stockCountDraft = {}; // variantId -> {qty, note}
 
+      // Pagination Variables
+      window.stockCurrentPage = 1;
+      window.stockItemsPerPage = 50;
+
+      window.changeStockPage = function(page) {
+        window.stockCurrentPage = page;
+        window.renderStock();
+      };
+
+      window.changeStockItemsPerPage = function(val) {
+        window.stockItemsPerPage = parseInt(val);
+        window.stockCurrentPage = 1;
+        window.renderStock();
+      };
+
       function saveColumnVisibility() {
         localStorage.setItem('posStockColumnVisibility', JSON.stringify(columnVisibility));
       }
@@ -314,6 +343,7 @@
         const btn = document.getElementById('btn-toggle-count-mode');
         btn.classList.toggle('ring-4', window.stockCountMode);
         btn.classList.toggle('ring-emerald-300', window.stockCountMode);
+        window.stockCurrentPage = 1; // Reset page to 1
         window.renderStock();
       };
 
@@ -428,7 +458,13 @@
             newVal = (newVal || '').trim() || currentValue;
           }
           obj[field] = newVal;
-          persist();
+          
+          if (typeof window.decoupledPersist === 'function') {
+            window.decoupledPersist(['products']);
+          } else {
+            persist();
+          }
+          
           window.renderStock();
         };
 
@@ -449,7 +485,13 @@
         const p = db.products[productId];
         if (!p) return;
         p.cat = [val];
-        persist();
+        
+        if (typeof window.decoupledPersist === 'function') {
+          window.decoupledPersist(['products']);
+        } else {
+          persist();
+        }
+        
         window.renderStock();
       };
 
@@ -562,7 +604,16 @@
           flt.sort((a, b) => b.p.id.localeCompare(a.p.id));
         }
 
-        if (flt.length === 0) {
+        // Pagination Logic
+        const totalItems = flt.length;
+        const totalPages = Math.ceil(totalItems / window.stockItemsPerPage) || 1;
+        if (window.stockCurrentPage > totalPages) window.stockCurrentPage = totalPages;
+
+        const startIndex = (window.stockCurrentPage - 1) * window.stockItemsPerPage;
+        const endIndex = startIndex + window.stockItemsPerPage;
+        const paginatedFlt = flt.slice(startIndex, endIndex);
+
+        if (totalItems === 0) {
           tbody.innerHTML = `<tr><td colspan="${allCols.length}" class="p-8 text-center text-slate-400 font-bold">ไม่พบรายการสินค้าที่ตรงเงื่อนไข</td></tr>`;
           updateLowStockBadge();
           return;
@@ -570,7 +621,7 @@
 
         let catOptionsForRow = (selected) => db.categories.map(c => `<option value="${escapeHTML(c.name)}" ${selected === c.name ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('') + `<option value="__NEW__">+ เพิ่มหมวดหมู่ใหม่...</option>`;
 
-        tbody.innerHTML = flt.map(item => {
+        let rowsHtml = paginatedFlt.map(item => {
           const p = item.p, v = item.v, isBelowMin = item.isBelowMin, limit = item.limit;
           const pid = escapeHTML(p.id), vid = escapeHTML(v.id);
 
@@ -634,11 +685,36 @@
           return `<tr class="hover:bg-slate-50 border-b">${allCols.map(c => cellMap[c.key] || '<td></td>').join('')}</tr>`;
         }).join('');
 
+        // Pagination row UI
+        const paginationRow = `
+          <tr class="bg-white border-t">
+            <td colspan="${allCols.length}" class="p-3">
+              <div class="flex flex-col sm:flex-row justify-between items-center w-full gap-2">
+                <div class="text-xs text-slate-500 font-bold">
+                   แสดง ${startIndex + 1} - ${Math.min(endIndex, totalItems)} จากทั้งหมด ${totalItems} รายการ
+                </div>
+                <div class="flex items-center gap-2">
+                   <select onchange="window.changeStockItemsPerPage(this.value)" class="text-xs border rounded-lg p-1.5 outline-none font-bold text-slate-700 bg-slate-50">
+                     <option value="30" ${window.stockItemsPerPage === 30 ? 'selected' : ''}>30 / หน้า</option>
+                     <option value="50" ${window.stockItemsPerPage === 50 ? 'selected' : ''}>50 / หน้า</option>
+                     <option value="100" ${window.stockItemsPerPage === 100 ? 'selected' : ''}>100 / หน้า</option>
+                   </select>
+                   <button onclick="window.changeStockPage(${window.stockCurrentPage - 1})" ${window.stockCurrentPage === 1 ? 'disabled class="px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg font-bold cursor-not-allowed"' : 'class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold cursor-pointer btn-touch hover:bg-indigo-100"'}>ก่อนหน้า</button>
+                   <span class="text-xs font-black px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg">${window.stockCurrentPage} / ${totalPages}</span>
+                   <button onclick="window.changeStockPage(${window.stockCurrentPage + 1})" ${window.stockCurrentPage === totalPages ? 'disabled class="px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg font-bold cursor-not-allowed"' : 'class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold cursor-pointer btn-touch hover:bg-indigo-100"'}>ถัดไป</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+
+        tbody.innerHTML = rowsHtml + paginationRow;
         updateLowStockBadge();
       };
 
       window.__setStockFilter = function(key, value) {
         stockFilters[key] = value;
+        window.stockCurrentPage = 1; // Reset to page 1 on search
         window.renderStock();
       };
 
@@ -1424,7 +1500,13 @@
               }
             });
           });
-          persist();
+          
+          if (typeof window.decoupledPersist === 'function') {
+            window.decoupledPersist(['products']);
+          } else {
+            persist();
+          }
+
           logTransaction('STOCK_ADJUST', { adjustCount });
           window.renderStock(); showView('stock');
           showToast(`ปรับปรุงยอดสต็อกของร้านค้าสำเร็จ ${adjustCount} รายการ`);
@@ -1936,4 +2018,5 @@
       };
 
       // ==========================================
+
 

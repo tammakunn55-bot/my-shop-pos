@@ -1341,9 +1341,6 @@ window.openAuditLogModal = function () {
   renderAuditLogList();
 };
 
-window.exportAuditLog = exportAuditLog;
-
-
 // ============ FROM: Smart-pos-pro-v9-modular/js/db/sheetsSchema.js ============
 // ==========================================
 // GOOGLE SHEETS — FULL DATABASE SCHEMA
