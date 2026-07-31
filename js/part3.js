@@ -11,30 +11,62 @@
 
       // EXCEL / CSV QUICK IMPORT ENGINE
       // ==========================================
+      // Each ROW represents either:
+      //  - a "MAIN" row: one size/variant of a product (ชื่อสินค้า + ขนาด + ทุน/ราคาขาย/สต็อก)
+      //  - a "FRACTION" row: one แบ่งขาย option that belongs to the size named in the same
+      //    "ขนาด" column of a MAIN row (matched by ชื่อสินค้า + ขนาด). This lets one flat
+      //    table fully represent multi-size products AND แบ่งขาย products, and lets
+      //    window.exportExcel() produce a file that re-imports into this same tool with all
+      //    columns auto-matched (see checkHeaderMatch rules below, which match this exact
+      //    wording first).
       const fieldsToMap = [
         { key: 'name', label: 'ชื่อสินค้าหลัก' },
+        { key: 'rowType', label: 'ประเภทแถว (ขนาดหลัก/แบ่งขาย)' },
         { key: 'size', label: 'ขนาดสินค้า' },
         { key: 'category', label: 'หมวดหมู่สินค้า' },
         { key: 'barcode', label: 'รหัสบาร์โค้ด' },
         { key: 'cost', label: 'ราคาทุน' },
-        { key: 'price', label: 'ราคาขาย' },
+        { key: 'price', label: 'ราคาขาย (หรือราคาแบ่งขาย)' },
         { key: 'stock', label: 'จำนวนสต็อก' },
-        { key: 'minStock', label: 'จุดสั่งซื้อขั้นต่ำ' }
+        { key: 'minStock', label: 'จุดสั่งซื้อขั้นต่ำ' },
+        { key: 'fractionName', label: 'ชื่อหน่วยแบ่งขาย' },
+        { key: 'fractionMultiplier', label: 'อัตราส่วนแบ่งขาย' }
       ];
 
       function checkHeaderMatch(header, key) {
         if (!header) return false;
         header = header.toString().toLowerCase().trim();
+
+        // เช็คตรงตัวกับหัวคอลัมน์ที่ window.exportExcel() สร้างเองก่อนเสมอ — คอลัมน์ใหม่บาง
+        // คอลัมน์มีคำคาบเกี่ยวกัน (เช่น "ชื่อหน่วยแบ่งขาย" มีคำว่า "ชื่อ" และ "ขาย" ปนอยู่ ซึ่งเป็น
+        // คำสำคัญของ "ชื่อสินค้า" และ "ราคาขาย" ด้วย) ถ้าจับคู่แบบทายคำอย่างเดียวจะเดาผิดฟิลด์ได้
+        // การเช็คตรงตัวก่อนจึงรับประกันว่าไฟล์ที่ส่งออกจากระบบเองจะจับคู่คอลัมน์ถูกทุกครั้งทันที
+        // โดยไม่ต้องจับคู่มือ ส่วนไฟล์จากภายนอกที่หัวคอลัมน์ไม่ตรงเป๊ะจะยังคงใช้การทายคำถัดไป
+        const exactHeaders = {
+          name: 'ชื่อสินค้า', rowType: 'ประเภทแถว', size: 'ขนาด', category: 'หมวดหมู่',
+          barcode: 'บาร์โค้ด', cost: 'ทุน', price: 'ราคาขาย', stock: 'สต็อก',
+          minStock: 'สต็อกขั้นต่ำ', fractionName: 'ชื่อหน่วยแบ่งขาย', fractionMultiplier: 'อัตราส่วนแบ่งขาย'
+        };
+        const exactMatchKey = Object.keys(exactHeaders).find(k => exactHeaders[k].toLowerCase() === header);
+        if (exactMatchKey) return exactMatchKey === key;
+
         const rules = {
-          name: ["ชื่อ", "name", "สินค้า", "product", "รายการ"],
-          size: ["ขนาด", "size", "รุ่น", "variant", "ย่อย", "หน่วย"],
-          category: ["หมวดหมู่", "category", "หมวด", "ประเภท", "cat"],
+          name: ["ชื่อสินค้า", "ชื่อ", "name", "สินค้า", "product", "รายการ"],
+          rowType: ["ประเภทแถว", "ประเภท", "rowtype", "row type", "type"],
+          size: ["ขนาด", "size", "รุ่น", "variant"],
+          category: ["หมวดหมู่", "category", "หมวด", "ประเภทสินค้า", "cat"],
           barcode: ["บาร์โค้ด", "barcode", "รหัส", "code", "id", "sku"],
           cost: ["ทุน", "cost", "ซื้อ", "ราคาส่ง"],
-          price: ["ขาย", "ราคา", "price", "ปลีก"],
+          price: ["ราคาขาย", "ขาย", "ราคา", "price", "ปลีก"],
           stock: ["สต็อก", "stock", "จำนวน", "คงเหลือ", "qty", "quantity", "ชิ้น"],
-          minStock: ["ขั้นต่ำ", "min", "reorder", "เกณฑ์", "เตือน"]
+          minStock: ["ขั้นต่ำ", "min", "reorder", "เกณฑ์", "เตือน"],
+          fractionName: ["ชื่อหน่วยแบ่งขาย", "หน่วยแบ่งขาย", "fraction name", "fractionname"],
+          fractionMultiplier: ["อัตราส่วนแบ่งขาย", "อัตราส่วน", "multiplier", "fraction"]
         };
+        // ถ้าหัวคอลัมน์เข้าเงื่อนไข "สต็อกขั้นต่ำ" (มีคำว่า "ขั้นต่ำ") ให้ตัดสิทธิ์ฟิลด์ "สต็อก" ทั่วไป
+        // ออกก่อน เพราะ "สต็อกขั้นต่ำ" มีคำว่า "สต็อก" ปนอยู่ด้วยเช่นกัน (ทายคำซ้อนกัน)
+        if (key === 'stock' && rules.minStock.some(term => header.includes(term))) return false;
+
         return rules[key] ? rules[key].some(term => header.includes(term)) : false;
       }
 
@@ -162,9 +194,14 @@
           let name = mapping.name !== null ? (row[mapping.name] || '').toString().trim() : '';
           let sizeName = mapping.size !== null ? (row[mapping.size] || '').toString().trim() : '';
           let category = mapping.category !== null ? (row[mapping.category] || '').toString().trim() : '';
+          let rowTypeRaw = mapping.rowType !== null ? (row[mapping.rowType] || '').toString().trim() : '';
           name = window.repairThaiText(name);
           sizeName = window.repairThaiText(sizeName) || 'ปกติ';
           category = window.repairThaiText(category);
+
+          // ไม่ระบุคอลัมน์ประเภทแถว หรือเว้นว่างไว้ = ถือเป็นแถว "ขนาดหลัก" ตามค่าเริ่มต้น
+          // (ย้อนหลังเข้ากันได้กับไฟล์เก่าที่ไม่มีคอลัมน์นี้)
+          const isFractionRow = /แบ่ง|fraction/i.test(rowTypeRaw);
 
           const rawBarcode = mapping.barcode !== null ? (row[mapping.barcode] || '').toString().trim() : '';
           const costP = parseImportNumber(mapping.cost !== null ? row[mapping.cost] : undefined, 0);
@@ -172,14 +209,20 @@
           const stockP = parseImportNumber(mapping.stock !== null ? row[mapping.stock] : undefined, 0);
           const minP = parseImportNumber(mapping.minStock !== null ? row[mapping.minStock] : undefined, 10);
 
+          let fractionName = mapping.fractionName !== null ? (row[mapping.fractionName] || '').toString().trim() : '';
+          fractionName = window.repairThaiText(fractionName);
+          const fractionMultiplierP = parseImportNumber(mapping.fractionMultiplier !== null ? row[mapping.fractionMultiplier] : undefined, 0);
+
           pendingImportData.push({
             _rowId: 'R' + (rowIdCounter++),
             id: 'P-' + generateID(),
+            rowType: isFractionRow ? 'FRACTION' : 'MAIN',
             name, sizeName, category, barcode: rawBarcode,
             cost: costP.value, costRaw: costP,
             price: priceP.value, priceRaw: priceP,
             stock: stockP.value, stockRaw: stockP,
-            minStock: minP.value, minRaw: minP
+            minStock: minP.value, minRaw: minP,
+            fractionName, fractionMultiplier: fractionMultiplierP.value, fractionMultiplierRaw: fractionMultiplierP
           });
         });
 
@@ -192,23 +235,42 @@
       // so the person always sees up-to-date validation before committing anything.
       window.revalidateAndRenderImportPreview = function() {
         const barcodeCounts = {};
-        const nameSizeCounts = {};
+        const nameSizeCounts = {}; // counts MAIN rows only (one variant per name+size)
+        const fractionKeyCounts = {}; // counts FRACTION rows per name+size+fractionName
         pendingImportData.forEach(item => {
           const bc = (item.barcode || '').toLowerCase();
-          if (bc) barcodeCounts[bc] = (barcodeCounts[bc] || 0) + 1;
+          if (item.rowType !== 'FRACTION' && bc) barcodeCounts[bc] = (barcodeCounts[bc] || 0) + 1;
           const ns = item.name.toLowerCase() + '|' + item.sizeName.toLowerCase();
-          if (item.name) nameSizeCounts[ns] = (nameSizeCounts[ns] || 0) + 1;
+          if (item.name) {
+            if (item.rowType === 'FRACTION') {
+              const fk = ns + '|' + (item.fractionName || '').toLowerCase();
+              fractionKeyCounts[fk] = (fractionKeyCounts[fk] || 0) + 1;
+            } else {
+              nameSizeCounts[ns] = (nameSizeCounts[ns] || 0) + 1;
+            }
+          }
         });
 
         // Map every barcode already in the live database to the product/size it belongs to,
         // so we can tell "this row updates that same item" apart from "this barcode collides
         // with a totally different product" (which would break barcode scanning if imported).
         const dbBarcodeMap = {};
+        // Map name+size -> { cost, existsInDb } so FRACTION rows can find their parent variant's
+        // cost, whether that variant is already in the database or is a MAIN row earlier in
+        // this same file (both cases must work for a re-imported export to round-trip cleanly).
+        const dbVariantByNameSize = {};
         Object.values(db.products).forEach(p => {
           if (p.isDeleted) return;
           p.variants.forEach(v => {
             if (v.barcode) dbBarcodeMap[v.barcode.toString().toLowerCase()] = { productName: p.name, sizeName: v.sizeName };
+            dbVariantByNameSize[p.name.toLowerCase() + '|' + v.sizeName.toLowerCase()] = { cost: v.cost };
           });
+        });
+        pendingImportData.forEach(item => {
+          if (item.rowType !== 'FRACTION' && item.name) {
+            const ns = item.name.toLowerCase() + '|' + item.sizeName.toLowerCase();
+            dbVariantByNameSize[ns] = { cost: item.cost }; // MAIN rows in-file take priority over DB
+          }
         });
 
         // Names of products currently suspended (ระงับการขาย) — importing a row with a
@@ -226,43 +288,71 @@
 
           if (!item.name) errors.push('ชื่อสินค้าว่าง');
 
-          if (item.costRaw.invalid) errors.push('ทุนไม่ใช่ตัวเลข');
-          else if (item.costRaw.negative) errors.push('ทุนติดลบ');
+          if (item.rowType === 'FRACTION') {
+            // แถวแบ่งขาย: อ้างอิงขนาดหลักด้วยชื่อสินค้า+ขนาด ไม่มีทุน/สต็อกของตัวเอง
+            // (ใช้ทุนของขนาดหลักคูณอัตราส่วนแทน เหมือนตอนขายจริง)
+            if (!item.fractionName) errors.push('ยังไม่ได้ระบุชื่อหน่วยแบ่งขาย');
 
-          if (item.priceRaw.invalid) errors.push('ราคาขายไม่ใช่ตัวเลข');
-          else if (item.priceRaw.negative) errors.push('ราคาขายติดลบ');
+            if (item.fractionMultiplierRaw.invalid) errors.push('อัตราส่วนแบ่งขายไม่ใช่ตัวเลข');
+            else if (item.fractionMultiplierRaw.blank || item.fractionMultiplier <= 0) errors.push('อัตราส่วนแบ่งขายต้องมากกว่า 0');
 
-          if (item.stockRaw.invalid) errors.push('สต็อกไม่ใช่ตัวเลข');
-          else if (item.stockRaw.negative) errors.push('สต็อกติดลบ');
+            if (item.priceRaw.invalid) errors.push('ราคาแบ่งขายไม่ใช่ตัวเลข');
+            else if (item.priceRaw.negative) errors.push('ราคาแบ่งขายติดลบ');
 
-          if (item.minRaw.invalid) errors.push('สต็อกขั้นต่ำไม่ใช่ตัวเลข');
-          else if (item.minRaw.negative) errors.push('สต็อกขั้นต่ำติดลบ');
-
-          const bc = (item.barcode || '').toLowerCase();
-          if (bc && barcodeCounts[bc] > 1) errors.push('บาร์โค้ดซ้ำกันเองในไฟล์นี้');
-
-          if (bc && dbBarcodeMap[bc]) {
-            const owner = dbBarcodeMap[bc];
-            const isSameItem = owner.productName.toLowerCase() === item.name.toLowerCase() && owner.sizeName === item.sizeName;
-            if (!isSameItem) {
-              errors.push(`บาร์โค้ดนี้ถูกใช้กับ "${owner.productName} (${owner.sizeName})" อยู่แล้ว`);
-            }
-          }
-
-          if (item.name) {
             const ns = item.name.toLowerCase() + '|' + item.sizeName.toLowerCase();
-            if (nameSizeCounts[ns] > 1) errors.push('ชื่อ+ขนาดซ้ำกันเองในไฟล์นี้');
-            if (deletedProductNames.has(item.name.toLowerCase())) {
-              warnings.push('สินค้านี้เคยถูกระงับการขายไว้ — นำเข้าจะกู้คืนสถานะให้ขายได้อีกครั้ง');
+            const parent = dbVariantByNameSize[ns];
+            if (!parent) {
+              errors.push(`ไม่พบขนาดหลัก "${item.sizeName}" ของสินค้านี้ (ต้องมีแถว "ขนาดหลัก" ชื่อ+ขนาดเดียวกันอยู่ในไฟล์ หรือมีอยู่แล้วในระบบ)`);
+            } else if (!item.fractionMultiplierRaw.invalid && item.fractionMultiplier > 0 && !item.priceRaw.invalid && !item.priceRaw.negative) {
+              const impliedCost = roundAmt(parent.cost * item.fractionMultiplier);
+              if (item.price > 0 && impliedCost > 0 && item.price < impliedCost) {
+                warnings.push(`ราคาแบ่งขายต่ำกว่าทุนต่อหน่วย (ทุนโดยประมาณ ${formatMoney(impliedCost)}) — ขาดทุน`);
+              }
             }
-          }
 
-          if (!item.priceRaw.invalid && !item.costRaw.invalid && item.price > 0 && item.cost > 0 && item.price < item.cost) {
-            warnings.push('ราคาขายต่ำกว่าทุน (ขาดทุน)');
-          }
+            if (item.name && item.fractionName) {
+              const fk = ns + '|' + item.fractionName.toLowerCase();
+              if (fractionKeyCounts[fk] > 1) errors.push('ชื่อหน่วยแบ่งขายซ้ำกันเองในไฟล์นี้ (ขนาดเดียวกัน)');
+            }
+          } else {
+            if (item.costRaw.invalid) errors.push('ทุนไม่ใช่ตัวเลข');
+            else if (item.costRaw.negative) errors.push('ทุนติดลบ');
 
-          if (item.category && !existingCategoryNames.has(item.category.toLowerCase())) {
-            warnings.push(`หมวดหมู่ "${item.category}" ยังไม่มีในระบบ — จะสร้างหมวดหมู่ใหม่ให้อัตโนมัติ`);
+            if (item.priceRaw.invalid) errors.push('ราคาขายไม่ใช่ตัวเลข');
+            else if (item.priceRaw.negative) errors.push('ราคาขายติดลบ');
+
+            if (item.stockRaw.invalid) errors.push('สต็อกไม่ใช่ตัวเลข');
+            else if (item.stockRaw.negative) errors.push('สต็อกติดลบ');
+
+            if (item.minRaw.invalid) errors.push('สต็อกขั้นต่ำไม่ใช่ตัวเลข');
+            else if (item.minRaw.negative) errors.push('สต็อกขั้นต่ำติดลบ');
+
+            const bc = (item.barcode || '').toLowerCase();
+            if (bc && barcodeCounts[bc] > 1) errors.push('บาร์โค้ดซ้ำกันเองในไฟล์นี้');
+
+            if (bc && dbBarcodeMap[bc]) {
+              const owner = dbBarcodeMap[bc];
+              const isSameItem = owner.productName.toLowerCase() === item.name.toLowerCase() && owner.sizeName === item.sizeName;
+              if (!isSameItem) {
+                errors.push(`บาร์โค้ดนี้ถูกใช้กับ "${owner.productName} (${owner.sizeName})" อยู่แล้ว`);
+              }
+            }
+
+            if (item.name) {
+              const ns = item.name.toLowerCase() + '|' + item.sizeName.toLowerCase();
+              if (nameSizeCounts[ns] > 1) errors.push('ชื่อ+ขนาดซ้ำกันเองในไฟล์นี้');
+              if (deletedProductNames.has(item.name.toLowerCase())) {
+                warnings.push('สินค้านี้เคยถูกระงับการขายไว้ — นำเข้าจะกู้คืนสถานะให้ขายได้อีกครั้ง');
+              }
+            }
+
+            if (!item.priceRaw.invalid && !item.costRaw.invalid && item.price > 0 && item.cost > 0 && item.price < item.cost) {
+              warnings.push('ราคาขายต่ำกว่าทุน (ขาดทุน)');
+            }
+
+            if (item.category && !existingCategoryNames.has(item.category.toLowerCase())) {
+              warnings.push(`หมวดหมู่ "${item.category}" ยังไม่มีในระบบ — จะสร้างหมวดหมู่ใหม่ให้อัตโนมัติ`);
+            }
           }
 
           item.errors = errors;
@@ -283,20 +373,24 @@
           const display = (value === undefined || value === null || value === '') ? '' : value.toString();
           return `<span class="inline-edit-cell" onclick="window.editImportCell('${rowId}','${field}',this,'${type || 'text'}')">${escapeHTML(display)}</span>`;
         };
+        const naCell = () => `<span class="text-slate-300">—</span>`;
 
         let html = `
           <table class="w-full text-left border text-[10px] whitespace-nowrap text-slate-700">
             <thead class="bg-slate-100 sticky top-0 z-10">
               <tr>
                 <th class="p-2 border min-w-[160px] whitespace-normal">สถานะ (คลิกค่าในตารางเพื่อแก้ไข)</th>
+                <th class="p-2 border">ประเภท</th>
                 <th class="p-2 border">สินค้าหลัก</th>
                 <th class="p-2 border">ขนาด</th>
                 <th class="p-2 border">หมวดหมู่</th>
                 <th class="p-2 border font-mono">บาร์โค้ด</th>
                 <th class="p-2 border">ทุน</th>
-                <th class="p-2 border">ราคาขาย</th>
+                <th class="p-2 border">ราคาขาย / ราคาแบ่งขาย</th>
                 <th class="p-2 border">สต็อก</th>
                 <th class="p-2 border text-rose-500">ขั้นต่ำ</th>
+                <th class="p-2 border">ชื่อหน่วยแบ่งขาย</th>
+                <th class="p-2 border">อัตราส่วน</th>
                 <th class="p-2 border"></th>
               </tr>
             </thead>
@@ -304,7 +398,8 @@
         `;
 
         rows.forEach(item => {
-          const rowClass = !item.isValid ? 'bg-rose-50' : (item.warnings.length ? 'bg-amber-50' : 'bg-white');
+          const isFraction = item.rowType === 'FRACTION';
+          const rowClass = !item.isValid ? 'bg-rose-50' : (item.warnings.length ? 'bg-amber-50' : (isFraction ? 'bg-emerald-50/40' : 'bg-white'));
           let statusLabel;
           if (!item.isValid) statusLabel = `❌ ${escapeHTML(item.errors.join(' / '))}`;
           else if (item.warnings.length) statusLabel = `⚠️ ${escapeHTML(item.warnings.join(' / '))}`;
@@ -317,14 +412,17 @@
           html += `
             <tr class="${rowClass}">
               <td class="p-2 border font-bold max-w-[220px] whitespace-normal">${statusLabel}</td>
+              <td class="p-2 border text-center">${isFraction ? '✂️ แบ่งขาย' : '📦 ขนาดหลัก'}</td>
               <td class="p-2 border">${editableCell(item._rowId, 'name', item.name, 'text')}</td>
               <td class="p-2 border">${editableCell(item._rowId, 'sizeName', item.sizeName, 'text')}</td>
-              <td class="p-2 border">${item.category ? editableCell(item._rowId, 'category', item.category, 'text') : `<span class="inline-edit-cell text-slate-400 italic" onclick="window.editImportCell('${item._rowId}','category',this,'text')">(งานทั่วไป)</span>`}</td>
-              <td class="p-2 border font-mono">${barcodeCell}</td>
-              <td class="p-2 border">${editableCell(item._rowId, 'cost', item.cost, 'number')}</td>
+              <td class="p-2 border">${isFraction ? naCell() : (item.category ? editableCell(item._rowId, 'category', item.category, 'text') : `<span class="inline-edit-cell text-slate-400 italic" onclick="window.editImportCell('${item._rowId}','category',this,'text')">(งานทั่วไป)</span>`)}</td>
+              <td class="p-2 border font-mono">${isFraction ? naCell() : barcodeCell}</td>
+              <td class="p-2 border">${isFraction ? naCell() : editableCell(item._rowId, 'cost', item.cost, 'number')}</td>
               <td class="p-2 border text-indigo-600 font-bold">${editableCell(item._rowId, 'price', item.price, 'number')}</td>
-              <td class="p-2 border text-emerald-600 font-bold">${editableCell(item._rowId, 'stock', item.stock, 'number')}</td>
-              <td class="p-2 border text-rose-600 font-bold">${editableCell(item._rowId, 'minStock', item.minStock, 'number')}</td>
+              <td class="p-2 border text-emerald-600 font-bold">${isFraction ? naCell() : editableCell(item._rowId, 'stock', item.stock, 'number')}</td>
+              <td class="p-2 border text-rose-600 font-bold">${isFraction ? naCell() : editableCell(item._rowId, 'minStock', item.minStock, 'number')}</td>
+              <td class="p-2 border">${isFraction ? editableCell(item._rowId, 'fractionName', item.fractionName, 'text') : naCell()}</td>
+              <td class="p-2 border">${isFraction ? editableCell(item._rowId, 'fractionMultiplier', item.fractionMultiplier, 'number') : naCell()}</td>
               <td class="p-2 border text-center"><button onclick="window.removeImportRow('${item._rowId}')" title="ลบแถวนี้ออกจากการนำเข้า" class="text-rose-500 font-black">✕</button></td>
             </tr>
           `;
@@ -371,6 +469,8 @@
             item.name = window.repairThaiText(raw.trim());
           } else if (field === 'category') {
             item.category = window.repairThaiText(raw.trim());
+          } else if (field === 'fractionName') {
+            item.fractionName = window.repairThaiText(raw.trim());
           } else {
             item[field] = raw.trim();
           }
@@ -395,9 +495,13 @@
             "ยืนยันการนำเข้าข้อมูล?",
             `ระบบจะเพิ่ม/อัปเดตสินค้า ${validCount} รายการลงคลังจริงทันที (แถวที่ยังผิดพลาดจะถูกข้ามไปโดยอัตโนมัติ)`,
             () => {
-              pendingImportData.forEach(item => {
-                if (!item.isValid) return;
+              const validItems = pendingImportData.filter(i => i.isValid);
+              const mainItems = validItems.filter(i => i.rowType !== 'FRACTION');
+              const fractionItems = validItems.filter(i => i.rowType === 'FRACTION');
+              let importedFractionCount = 0;
 
+              // PASS 1: สร้าง/อัปเดตสินค้าและขนาดหลักก่อน (เหมือนเดิมทุกประการ)
+              mainItems.forEach(item => {
                 let barcode = item.barcode;
                 if (!barcode) {
                   barcode = 'AUTO-' + (db.counters.barcode++);
@@ -442,6 +546,7 @@
                     existingV.stock = roundStock(item.stock);
                     existingV.minStock = item.minStock;
                     if (barcode) existingV.barcode = barcode;
+                    if (!Array.isArray(existingV.fractions)) existingV.fractions = [];
                   } else {
                     existingProduct.variants.push({
                       id: 'V-' + generateID(), sizeName: item.sizeName, barcode: barcode,
@@ -457,9 +562,33 @@
                 }
               });
 
+              // PASS 2: แนบตัวเลือกแบ่งขายเข้ากับขนาดหลักที่ตรงกัน (ชื่อสินค้า + ขนาด) —
+              // รันหลัง PASS 1 เสมอ เพื่อให้ขนาดหลักที่เพิ่งสร้าง/อัปเดตในไฟล์เดียวกันมีอยู่แล้ว
+              fractionItems.forEach(item => {
+                const product = Object.values(db.products).find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                const variant = product ? product.variants.find(v => v.sizeName === item.sizeName) : null;
+                if (!product || !variant) return; // ป้องกันพลาด แม้ revalidate ควรกรองออกไปแล้วก็ตาม
+                if (!Array.isArray(variant.fractions)) variant.fractions = [];
+
+                const existingFraction = variant.fractions.find(f => f.fractionName.toLowerCase() === item.fractionName.toLowerCase());
+                if (existingFraction) {
+                  existingFraction.fractionMultiplier = item.fractionMultiplier;
+                  existingFraction.fractionPrice = item.price;
+                } else {
+                  variant.fractions.push({
+                    id: 'F-' + generateID(),
+                    fractionName: item.fractionName,
+                    fractionMultiplier: item.fractionMultiplier,
+                    fractionPrice: item.price
+                  });
+                }
+                importedFractionCount++;
+              });
+
+
               persist(); renderSaleHome(); window.renderStock(); closeModal('modal-command');
-              logTransaction('PRODUCT_IMPORT', { importedCount: validCount, skippedCount: pendingImportData.length - validCount });
-              showToast(`นำเข้าข้อมูลสินค้าสำเร็จ ${validCount} รายการ`);
+              logTransaction('PRODUCT_IMPORT', { importedCount: validCount, mainCount: mainItems.length, fractionCount: importedFractionCount, skippedCount: pendingImportData.length - validCount });
+              showToast(`นำเข้าข้อมูลสินค้าสำเร็จ ${mainItems.length} ขนาด${importedFractionCount > 0 ? ` + ${importedFractionCount} ตัวเลือกแบ่งขาย` : ''}`);
             }
           );
         });
@@ -643,11 +772,30 @@
       // BACKUP / EXPORT / RESTORE SYSTEM
       // ==========================================
       window.exportExcel = function() {
-        const rows = [["ชื่อสินค้า", "ขนาด", "บาร์โค้ด", "ทุน", "ราคาขาย", "สต็อก", "สต็อกขั้นต่ำ"]];
+        // หัวคอลัมน์นี้ตรงกับ fieldsToMap/checkHeaderMatch ของระบบนำเข้าทุกคำ — อัปโหลดไฟล์นี้
+        // กลับเข้าไปที่ "นำเข้าสินค้าด่วน" แล้วทุกคอลัมน์จะจับคู่ให้อัตโนมัติ (multi-size และ
+        // สินค้าแบ่งขายจะกลับเข้าไปครบถ้วนตามเดิม ไม่ใช่แค่ขนาดหลัก)
+        const rows = [[
+          "ชื่อสินค้า", "ประเภทแถว", "ขนาด", "หมวดหมู่", "บาร์โค้ด",
+          "ทุน", "ราคาขาย", "สต็อก", "สต็อกขั้นต่ำ",
+          "ชื่อหน่วยแบ่งขาย", "อัตราส่วนแบ่งขาย"
+        ]];
         Object.values(db.products).forEach(p => {
-          if(p.isDeleted) return;
+          if (p.isDeleted) return;
+          const categoryText = Array.isArray(p.cat) ? p.cat.join(', ') : (p.cat || '');
           p.variants.forEach(v => {
-            rows.push([p.name, v.sizeName, v.barcode, v.cost, v.price, v.stock, v.minStock || 10]);
+            rows.push([
+              p.name, "ขนาดหลัก", v.sizeName, categoryText, v.barcode,
+              v.cost, v.price, v.stock, v.minStock || 10,
+              "", ""
+            ]);
+            (v.fractions || []).forEach(f => {
+              rows.push([
+                p.name, "แบ่งขาย", v.sizeName, "", "",
+                "", f.fractionPrice, "", "",
+                f.fractionName, f.fractionMultiplier
+              ]);
+            });
           });
         });
         const wb = XLSX.utils.book_new();

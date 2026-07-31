@@ -229,6 +229,37 @@
         ));
         if (dupBarcode) return showAlert("บาร์โค้ดซ้ำ", `บาร์โค้ด "${dupBarcode.barcode}" ถูกใช้กับสินค้าอื่นอยู่แล้ว กรุณาใช้บาร์โค้ดอื่น`, true);
 
+        // ป้องกันข้อผิดพลาดขายต่ำกว่าทุน: ตรวจทุกขนาดและทุกตัวเลือกแบ่งขาย ถ้าราคาขาย < ทุน
+        // (ทุนของหน่วยแบ่งขายคำนวณจากทุนของขนาดหลัก × อัตราส่วน เหมือนตอนคิดต้นทุนขายจริง)
+        // ให้เตือนและต้องกดยืนยันซ้ำก่อนบันทึก ไม่บล็อกเด็ดขาดเพราะบางร้านตั้งใจขายขาดทุนเพื่อระบาย
+        // สินค้าเป็นครั้งคราว แต่ต้องรู้ตัวก่อนกดบันทึกเสมอ
+        const underCostIssues = [];
+        variants.forEach(v => {
+          if (v.price > 0 && v.cost > 0 && v.price < v.cost) {
+            underCostIssues.push(`ขนาด "${v.sizeName}": ขาย ${formatMoney(v.price)} ต่ำกว่าทุน ${formatMoney(v.cost)}`);
+          }
+          (v.fractions || []).forEach(f => {
+            const impliedCost = roundAmt(v.cost * f.fractionMultiplier);
+            if (f.fractionPrice > 0 && impliedCost > 0 && f.fractionPrice < impliedCost) {
+              underCostIssues.push(`แบ่งขาย "${v.sizeName} - ${f.fractionName}": ขาย ${formatMoney(f.fractionPrice)} ต่ำกว่าทุนโดยประมาณ ${formatMoney(impliedCost)}`);
+            }
+          });
+        });
+
+        const doCommit = () => window.__commitSaveProduct(id, name, image, imageUrl, cats, variants);
+
+        if (underCostIssues.length > 0) {
+          window.showCustomConfirm(
+            "⚠️ พบราคาขายต่ำกว่าทุน",
+            `รายการต่อไปนี้จะขาดทุนถ้าขาย: ${underCostIssues.join(' / ')} — ยืนยันบันทึกต่อหรือไม่?`,
+            doCommit
+          );
+        } else {
+          doCommit();
+        }
+      };
+
+      window.__commitSaveProduct = function(id, name, image, imageUrl, cats, variants) {
         const isNew = !db.products[id];
         db.products[id] = { id, name, image, imageUrl, cat: cats, variants, isDeleted: false };
         
@@ -458,13 +489,28 @@
             newVal = (newVal || '').trim() || currentValue;
           }
           obj[field] = newVal;
-          
+
           if (typeof window.decoupledPersist === 'function') {
             window.decoupledPersist(['products']);
           } else {
             persist();
           }
-          
+
+          // ป้องกันข้อผิดพลาดขายต่ำกว่าทุน: เตือนทันทีถ้าแก้ราคาขาย (ขนาดหลักหรือแบ่งขาย)
+          // แล้วต่ำกว่าทุน — ไม่บล็อกการบันทึก (ค่าที่แก้บันทึกไปแล้ว) แต่แจ้งให้รู้ตัวทันที
+          // เพื่อกลับมาแก้ไขได้ทันหากพิมพ์ผิด
+          if (field === 'price' && type === 'variant') {
+            if (obj.price > 0 && obj.cost > 0 && obj.price < obj.cost) {
+              showToast(`⚠️ ราคาขาย ${formatMoney(obj.price)} ต่ำกว่าทุน ${formatMoney(obj.cost)} — ขาดทุน!`);
+            }
+          } else if (field === 'fractionPrice' && type === 'fraction') {
+            const v = p.variants.find(x => x.id === variantId);
+            const impliedCost = v ? roundAmt(v.cost * (obj.fractionMultiplier || 0)) : 0;
+            if (obj.fractionPrice > 0 && impliedCost > 0 && obj.fractionPrice < impliedCost) {
+              showToast(`⚠️ ราคาแบ่งขาย ${formatMoney(obj.fractionPrice)} ต่ำกว่าทุนโดยประมาณ ${formatMoney(impliedCost)} — ขาดทุน!`);
+            }
+          }
+
           window.renderStock();
         };
 

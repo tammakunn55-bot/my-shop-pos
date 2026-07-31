@@ -1171,13 +1171,14 @@
             <input type="file" id="import-file-uploader" class="hidden" accept=".xlsx, .csv" onchange="window.handleBulkFileUpload(event)">
           </div>
           <div class="flex flex-col">
-            <textarea id="command-input" class="w-full flex-1 p-3 border rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" placeholder="หรือวางข้อความคั่นด้วยลูกน้ำ (CSV) ที่นี่...&#10;ลำดับ: ชื่อสินค้า, ขนาด, หมวดหมู่, บาร์โค้ด, ทุน, ขาย, สต็อก, ขั้นต่ำ&#10;ตัวอย่าง: ท่อ PVC สีฟ้า, 1/2 นิ้ว, ท่อ &amp; ข้อต่อ, 8850001, 35, 55, 120, 25"></textarea>
+            <textarea id="command-input" class="w-full flex-1 p-3 border rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" placeholder="หรือวางข้อความคั่นด้วยลูกน้ำ (CSV) ที่นี่... (รองรับเฉพาะขนาดหลัก ถ้าต้องการนำเข้าตัวเลือกแบ่งขายด้วย ให้ใช้วิธีอัปโหลดไฟล์ Excel/CSV ทางซ้ายแทน)&#10;ลำดับ: ชื่อสินค้า, ขนาด, หมวดหมู่, บาร์โค้ด, ทุน, ขาย, สต็อก, ขั้นต่ำ&#10;ตัวอย่าง: ท่อ PVC สีฟ้า, 1/2 นิ้ว, ท่อ &amp; ข้อต่อ, 8850001, 35, 55, 120, 25"></textarea>
             <button onclick="window.processCommandText()" class="w-full mt-2 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs btn-touch">ประมวลผลข้อความ</button>
           </div>
         </div>
         <div id="import-mapping-sec" class="hidden bg-indigo-50/50 p-4 border border-indigo-100 rounded-2xl mb-4 text-xs">
           <h4 class="font-bold text-indigo-900 mb-3">🛠️ จับคู่คอลัมน์จากไฟล์ที่อัปโหลด</h4>
-          <div id="mapping-selectors-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 text-slate-800"></div>
+          <p class="text-[10px] text-indigo-800/70 mb-3">💡 ไฟล์ที่ส่งออกจากปุ่ม "📊 Excel" ในหน้าคลังสินค้าจะจับคู่คอลัมน์ให้อัตโนมัติทุกคอลัมน์ (รวมขนาด/หมวดหมู่/ตัวเลือกแบ่งขาย) — ไม่ต้องจับคู่มือ</p>
+          <div id="mapping-selectors-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 text-slate-800"></div>
           <button onclick="window.applyColumnMappingAndAnalyze()" class="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs btn-touch">วิเคราะห์และจำลองการนำเข้า</button>
         </div>
         <div id="preview-actions-bar" class="hidden flex justify-between items-center mb-2 bg-slate-100 p-2 rounded-xl text-xs">
