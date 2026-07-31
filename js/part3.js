@@ -24,6 +24,7 @@
         { key: 'rowType', label: 'ประเภทแถว (ขนาดหลัก/แบ่งขาย)' },
         { key: 'size', label: 'ขนาดสินค้า' },
         { key: 'category', label: 'หมวดหมู่สินค้า' },
+        { key: 'groupName', label: 'กลุ่มสินค้า (การ์ดร่วม, ถ้ามี)' },
         { key: 'barcode', label: 'รหัสบาร์โค้ด' },
         { key: 'cost', label: 'ราคาทุน' },
         { key: 'price', label: 'ราคาขาย (หรือราคาแบ่งขาย)' },
@@ -39,12 +40,13 @@
 
         // เช็คตรงตัวกับหัวคอลัมน์ที่ window.exportExcel() สร้างเองก่อนเสมอ — คอลัมน์ใหม่บาง
         // คอลัมน์มีคำคาบเกี่ยวกัน (เช่น "ชื่อหน่วยแบ่งขาย" มีคำว่า "ชื่อ" และ "ขาย" ปนอยู่ ซึ่งเป็น
-        // คำสำคัญของ "ชื่อสินค้า" และ "ราคาขาย" ด้วย) ถ้าจับคู่แบบทายคำอย่างเดียวจะเดาผิดฟิลด์ได้
-        // การเช็คตรงตัวก่อนจึงรับประกันว่าไฟล์ที่ส่งออกจากระบบเองจะจับคู่คอลัมน์ถูกทุกครั้งทันที
-        // โดยไม่ต้องจับคู่มือ ส่วนไฟล์จากภายนอกที่หัวคอลัมน์ไม่ตรงเป๊ะจะยังคงใช้การทายคำถัดไป
+        // คำสำคัญของ "ชื่อสินค้า" และ "ราคาขาย" ด้วย, "กลุ่มสินค้า" มีคำว่า "สินค้า" ปนอยู่ด้วยเช่นกัน)
+        // ถ้าจับคู่แบบทายคำอย่างเดียวจะเดาผิดฟิลด์ได้ การเช็คตรงตัวก่อนจึงรับประกันว่าไฟล์ที่ส่งออก
+        // จากระบบเองจะจับคู่คอลัมน์ถูกทุกครั้งทันที โดยไม่ต้องจับคู่มือ ส่วนไฟล์จากภายนอกที่หัวคอลัมน์
+        // ไม่ตรงเป๊ะจะยังคงใช้การทายคำถัดไป
         const exactHeaders = {
           name: 'ชื่อสินค้า', rowType: 'ประเภทแถว', size: 'ขนาด', category: 'หมวดหมู่',
-          barcode: 'บาร์โค้ด', cost: 'ทุน', price: 'ราคาขาย', stock: 'สต็อก',
+          groupName: 'กลุ่มสินค้า', barcode: 'บาร์โค้ด', cost: 'ทุน', price: 'ราคาขาย', stock: 'สต็อก',
           minStock: 'สต็อกขั้นต่ำ', fractionName: 'ชื่อหน่วยแบ่งขาย', fractionMultiplier: 'อัตราส่วนแบ่งขาย'
         };
         const exactMatchKey = Object.keys(exactHeaders).find(k => exactHeaders[k].toLowerCase() === header);
@@ -55,6 +57,7 @@
           rowType: ["ประเภทแถว", "ประเภท", "rowtype", "row type", "type"],
           size: ["ขนาด", "size", "รุ่น", "variant"],
           category: ["หมวดหมู่", "category", "หมวด", "ประเภทสินค้า", "cat"],
+          groupName: ["กลุ่มสินค้า", "กลุ่ม", "group"],
           barcode: ["บาร์โค้ด", "barcode", "รหัส", "code", "id", "sku"],
           cost: ["ทุน", "cost", "ซื้อ", "ราคาส่ง"],
           price: ["ราคาขาย", "ขาย", "ราคา", "price", "ปลีก"],
@@ -194,10 +197,12 @@
           let name = mapping.name !== null ? (row[mapping.name] || '').toString().trim() : '';
           let sizeName = mapping.size !== null ? (row[mapping.size] || '').toString().trim() : '';
           let category = mapping.category !== null ? (row[mapping.category] || '').toString().trim() : '';
+          let groupName = mapping.groupName !== null ? (row[mapping.groupName] || '').toString().trim() : '';
           let rowTypeRaw = mapping.rowType !== null ? (row[mapping.rowType] || '').toString().trim() : '';
           name = window.repairThaiText(name);
           sizeName = window.repairThaiText(sizeName) || 'ปกติ';
           category = window.repairThaiText(category);
+          groupName = window.repairThaiText(groupName);
 
           // ไม่ระบุคอลัมน์ประเภทแถว หรือเว้นว่างไว้ = ถือเป็นแถว "ขนาดหลัก" ตามค่าเริ่มต้น
           // (ย้อนหลังเข้ากันได้กับไฟล์เก่าที่ไม่มีคอลัมน์นี้)
@@ -217,7 +222,7 @@
             _rowId: 'R' + (rowIdCounter++),
             id: 'P-' + generateID(),
             rowType: isFractionRow ? 'FRACTION' : 'MAIN',
-            name, sizeName, category, barcode: rawBarcode,
+            name, sizeName, category, groupName, barcode: rawBarcode,
             cost: costP.value, costRaw: costP,
             price: priceP.value, priceRaw: priceP,
             stock: stockP.value, stockRaw: stockP,
@@ -539,6 +544,9 @@
                   if (item.category && !existingProduct.cat.some(c => c.toLowerCase() === categoryName.toLowerCase())) {
                     existingProduct.cat.push(categoryName);
                   }
+                  // อัปเดตกลุ่มสินค้าเฉพาะเมื่อไฟล์ระบุค่ามาจริงๆ (ไม่เขียนทับด้วยค่าว่างถ้าช่องนี้ไม่ได้กรอก
+                  // ในไฟล์ที่นำเข้า เพื่อไม่ให้การนำเข้าซ้ำไปลบการจัดกลุ่มที่ตั้งไว้ในระบบโดยไม่ตั้งใจ)
+                  if (item.groupName) existingProduct.groupName = item.groupName;
                   const existingV = existingProduct.variants.find(v => v.sizeName === item.sizeName || (barcode && v.barcode === barcode));
                   if (existingV) {
                     existingV.cost = item.cost;
@@ -555,7 +563,7 @@
                   }
                 } else {
                   db.products[item.id] = {
-                    id: item.id, name: item.name, cat: [categoryName], image: "📦", isDeleted: false, variants: [
+                    id: item.id, name: item.name, cat: [categoryName], groupName: item.groupName || '', image: "📦", isDeleted: false, variants: [
                       { id: 'V-' + generateID(), sizeName: item.sizeName, barcode: barcode, cost: item.cost, price: item.price, stock: roundStock(item.stock), minStock: item.minStock, fractions: [] }
                     ]
                   };
@@ -776,7 +784,7 @@
         // กลับเข้าไปที่ "นำเข้าสินค้าด่วน" แล้วทุกคอลัมน์จะจับคู่ให้อัตโนมัติ (multi-size และ
         // สินค้าแบ่งขายจะกลับเข้าไปครบถ้วนตามเดิม ไม่ใช่แค่ขนาดหลัก)
         const rows = [[
-          "ชื่อสินค้า", "ประเภทแถว", "ขนาด", "หมวดหมู่", "บาร์โค้ด",
+          "ชื่อสินค้า", "ประเภทแถว", "ขนาด", "หมวดหมู่", "กลุ่มสินค้า", "บาร์โค้ด",
           "ทุน", "ราคาขาย", "สต็อก", "สต็อกขั้นต่ำ",
           "ชื่อหน่วยแบ่งขาย", "อัตราส่วนแบ่งขาย"
         ]];
@@ -785,13 +793,13 @@
           const categoryText = Array.isArray(p.cat) ? p.cat.join(', ') : (p.cat || '');
           p.variants.forEach(v => {
             rows.push([
-              p.name, "ขนาดหลัก", v.sizeName, categoryText, v.barcode,
+              p.name, "ขนาดหลัก", v.sizeName, categoryText, p.groupName || '', v.barcode,
               v.cost, v.price, v.stock, v.minStock || 10,
               "", ""
             ]);
             (v.fractions || []).forEach(f => {
               rows.push([
-                p.name, "แบ่งขาย", v.sizeName, "", "",
+                p.name, "แบ่งขาย", v.sizeName, "", "", "",
                 "", f.fractionPrice, "", "",
                 f.fractionName, f.fractionMultiplier
               ]);

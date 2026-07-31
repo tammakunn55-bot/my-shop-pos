@@ -57,6 +57,10 @@
             document.getElementById('p-image-url').value = p.imageUrl || '';
             window.previewProductImageUrl();
             document.getElementById('btn-delete-p').classList.remove('hidden');
+
+            document.getElementById('p-group-enabled').checked = !!p.groupName;
+            document.getElementById('p-group-name').value = p.groupName || '';
+            window.toggleGroupNameField();
             
             if(p.cat) {
               document.querySelectorAll('input[name="p-cat-chk"]').forEach(el => {
@@ -76,11 +80,23 @@
             window.previewProductImageUrl();
             document.getElementById('btn-delete-p').classList.add('hidden');
             document.getElementById('variant-list-container').innerHTML = '';
+
+            document.getElementById('p-group-enabled').checked = false;
+            document.getElementById('p-group-name').value = '';
+            window.toggleGroupNameField();
+
             appendVariantHTML();
           }
           document.getElementById('modal-product').classList.remove('hidden');
           document.getElementById('modal-product').classList.add('flex');
         });
+      };
+
+      window.toggleGroupNameField = function() {
+        const enabled = document.getElementById('p-group-enabled').checked;
+        const field = document.getElementById('p-group-name');
+        field.disabled = !enabled;
+        if (!enabled) field.value = '';
       };
 
       window.addVariantRow = function() {
@@ -169,6 +185,12 @@
         const imageUrl = document.getElementById('p-image-url').value.trim();
         if(!name) return showAlert("ข้อมูลไม่ครบ", "กรุณาระบุชื่อสินค้าหลัก", true);
 
+        const groupEnabled = document.getElementById('p-group-enabled').checked;
+        const groupName = window.repairThaiText(document.getElementById('p-group-name').value.trim());
+        if (groupEnabled && !groupName) {
+          return showAlert("ข้อมูลไม่ครบ", "เปิดใช้ \"การ์ดร่วมกับสินค้าอื่น\" แล้ว กรุณาระบุชื่อกลุ่มสินค้าด้วย", true);
+        }
+
         const cats = [];
         document.querySelectorAll('input[name="p-cat-chk"]:checked').forEach(el => cats.push(el.value));
 
@@ -246,7 +268,7 @@
           });
         });
 
-        const doCommit = () => window.__commitSaveProduct(id, name, image, imageUrl, cats, variants);
+        const doCommit = () => window.__commitSaveProduct(id, name, image, imageUrl, cats, variants, groupName);
 
         if (underCostIssues.length > 0) {
           window.showCustomConfirm(
@@ -259,9 +281,9 @@
         }
       };
 
-      window.__commitSaveProduct = function(id, name, image, imageUrl, cats, variants) {
+      window.__commitSaveProduct = function(id, name, image, imageUrl, cats, variants, groupName) {
         const isNew = !db.products[id];
-        db.products[id] = { id, name, image, imageUrl, cat: cats, variants, isDeleted: false };
+        db.products[id] = { id, name, image, imageUrl, cat: cats, variants, isDeleted: false, groupName: groupName || '' };
         
         // Trigger optimized persistence if available
         if (typeof window.decoupledPersist === 'function') {

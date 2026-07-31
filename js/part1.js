@@ -865,8 +865,9 @@
         const matches = Object.values(db.products).filter(p => {
           if (p.isDeleted) return false;
           const matchName = p.name.toLowerCase().includes(query);
+          const matchGroup = p.groupName && p.groupName.toLowerCase().includes(query);
           const matchBarcode = p.variants && p.variants.some(v => v.barcode && v.barcode.toLowerCase().includes(query));
-          return matchName || matchBarcode;
+          return matchName || matchGroup || matchBarcode;
         });
 
         const exactMatchBarcodeItem = [];
@@ -904,6 +905,29 @@
         imgEl.replaceWith(fallback);
       };
 
+      // แบ่งรายการสินค้าออกเป็น "การ์ดเดี่ยว" (ไม่มีกลุ่ม) และ "การ์ดกลุ่ม" (สินค้าหลายชิ้นที่ตั้ง
+      // ชื่อกลุ่มเดียวกันไว้ในหน้าแก้ไขสินค้า) โดยคงลำดับเดิมของ productsList ไว้ — การ์ดกลุ่มจะ
+      // ปรากฏ ณ ตำแหน่งของสมาชิกตัวแรกที่เจอ ส่วนสมาชิกที่เหลือของกลุ่มเดียวกันจะถูกข้ามไป (ไม่ให้
+      // มีการ์ดซ้ำ)
+      function buildDisplayCards(productsList) {
+        const cards = [];
+        const seenGroups = new Set();
+        productsList.forEach(p => {
+          const gName = (p.groupName || '').trim();
+          if (!gName) {
+            cards.push({ type: 'single', product: p });
+            return;
+          }
+          const gKey = gName.toLowerCase();
+          if (seenGroups.has(gKey)) return;
+          seenGroups.add(gKey);
+          const members = productsList.filter(x => (x.groupName || '').trim().toLowerCase() === gKey);
+          const cheapestPrice = Math.min(...members.flatMap(m => m.variants.map(v => v.price)).filter(n => !isNaN(n)));
+          cards.push({ type: 'group', groupKey: gName, members, image: members[0].image, imageUrl: members.find(m => m.imageUrl)?.imageUrl || '', price: cheapestPrice });
+        });
+        return cards;
+      }
+
       function renderProductGrid(productsList) {
         const grid = document.getElementById('product-grid');
         if (!grid) return;
@@ -912,7 +936,38 @@
           return;
         }
 
-        grid.innerHTML = productsList.map(p => {
+        const cards = buildDisplayCards(productsList);
+
+        grid.innerHTML = cards.map(card => {
+          if (card.type === 'group') {
+            const g = card;
+            const hasPhoto = !!g.imageUrl;
+            const clickAttr = `window.onGroupClick('${escapeHTML(g.groupKey)}')`;
+            if (hasPhoto) {
+              return `
+                <div onclick="${clickAttr}" class="p-card relative overflow-hidden h-48 shadow-xs cursor-pointer ring-2 ring-amber-300">
+                  <img src="${escapeHTML(g.imageUrl)}" data-fallback-emoji="${escapeHTML(g.image || '📦')}" onerror="window.handleProductCardImgError(this)" class="absolute inset-0 w-full h-full object-cover block">
+                  <span class="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow">🔗 ${g.members.length} รายการ</span>
+                  <div class="absolute inset-x-0 bottom-0 px-2 pt-6 pb-1.5" style="background:linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0));">
+                    <p class="font-extrabold text-[11px] text-white leading-tight line-clamp-2">${escapeHTML(g.groupKey)}</p>
+                    <p class="text-[10px] text-emerald-300 font-bold mt-0.5">เริ่มต้น: ${formatMoney(g.price || 0)}</p>
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <div onclick="${clickAttr}" class="p-card bg-white p-4 border-2 border-amber-300 shadow-xs flex flex-col items-center justify-between text-center relative h-48 cursor-pointer">
+                <span class="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow">🔗 ${g.members.length} รายการ</span>
+                <div class="text-3xl mb-1">${escapeHTML(g.image || '📦')}</div>
+                <div class="w-full">
+                  <p class="font-extrabold text-[11px] text-slate-800 leading-tight line-clamp-2 h-8">${escapeHTML(g.groupKey)}</p>
+                  <p class="text-[10px] text-indigo-600 font-bold mt-1">เริ่มต้น: ${formatMoney(g.price || 0)}</p>
+                </div>
+              </div>
+            `;
+          }
+
+          const p = card.product;
           const hasPhoto = !!p.imageUrl;
           if (hasPhoto) {
             return `
@@ -938,19 +993,81 @@
       }
 
       window.onProductClick = function(productId) {
-        const p = db.products[productId];
-        if(!p) return;
+        window.__enterVariantModal(productId, null);
+      };
 
-        if(p.variants.length === 1 && (!p.variants[0].fractions || p.variants[0].fractions.length === 0)) {
-          window.addUnifiedToCart(p.id, p.variants[0].id, null);
-        } else {
-          window.openSelectVariantModal(productId);
+      window.onGroupClick = function(groupKey) {
+        window.openGroupModal(groupKey);
+      };
+
+      // จำ groupKey ล่าสุดไว้ ใช้ตอนกดปุ่ม "ย้อนกลับ" จาก popup เลือกขนาด กลับไปยัง popup เลือก
+      // สินค้าในกลุ่ม (เฉพาะกรณีเข้าถึงสินค้านั้นผ่านการ์ดกลุ่ม ไม่ใช่การ์ดเดี่ยว)
+      let lastGroupKeyForBack = null;
+      // จำ productId ล่าสุดที่เปิด popup เลือกหน่วย (แบ่งขาย) ไว้ ใช้ตอนกดปุ่ม "ย้อนกลับ" กลับไป
+      // popup เลือกขนาด
+      let lastVariantModalProductId = null;
+
+      window.openGroupModal = function(groupKey) {
+        const gKeyLower = groupKey.toLowerCase();
+        const members = Object.values(db.products).filter(x => !x.isDeleted && (x.groupName || '').trim().toLowerCase() === gKeyLower);
+        if (members.length === 0) return;
+
+        const title = document.getElementById('g-select-title');
+        const desc = document.getElementById('g-select-desc');
+        const emoji = document.getElementById('group-modal-emoji');
+        if (title) title.innerText = groupKey;
+        if (desc) desc.innerText = "เลือกชนิด/ยี่ห้อในกลุ่ม " + groupKey;
+        if (emoji) emoji.innerText = members[0].image || "🗂️";
+
+        const container = document.getElementById('g-select-list');
+        if (container) {
+          container.innerHTML = members.map(p => {
+            const sizeCount = p.variants.length;
+            const startPrice = Math.min(...p.variants.map(v => v.price).filter(n => !isNaN(n)));
+            return `
+              <div onclick="window.onGroupMemberClick('${escapeHTML(p.id)}', '${escapeHTML(groupKey)}')" 
+                   class="p-3 border-2 border-slate-100 hover:border-amber-500 rounded-2xl cursor-pointer bg-slate-50 transition active:scale-95 flex justify-between items-center mb-2">
+                <div>
+                  <b class="text-xs text-slate-800">${escapeHTML(p.name)}</b>
+                  <p class="text-[10px] text-slate-400 mt-0.5">${sizeCount} ขนาด/ตัวเลือก</p>
+                </div>
+                <span class="text-xs font-bold text-amber-600">เริ่มต้น ${formatMoney(startPrice || 0)}</span>
+              </div>
+            `;
+          }).join('');
+        }
+
+        const modal = document.getElementById('modal-select-group');
+        if (modal) {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
         }
       };
 
-      window.openSelectVariantModal = function(productId) {
+      window.onGroupMemberClick = function(productId, groupKey) {
+        window.closeModal('modal-select-group');
+        window.__enterVariantModal(productId, groupKey);
+      };
+
+      // จุดเข้าเดียวสำหรับเปิด popup เลือกขนาด ไม่ว่าจะมาจากการ์ดเดี่ยว (fromGroupKey = null) หรือ
+      // มาจากการเลือกสินค้าภายในการ์ดกลุ่มก่อนแล้ว (fromGroupKey = ชื่อกลุ่ม) — ถ้ามีขนาดเดียวและ
+      // ไม่มีตัวเลือกแบ่งขาย จะเพิ่มลงตะกร้าทันทีโดยไม่ต้องเปิด popup อีกชั้น
+      window.__enterVariantModal = function(productId, fromGroupKey) {
+        const p = db.products[productId];
+        if (!p) return;
+
+        if (p.variants.length === 1 && (!p.variants[0].fractions || p.variants[0].fractions.length === 0)) {
+          window.addUnifiedToCart(p.id, p.variants[0].id, null);
+          return;
+        }
+        window.openSelectVariantModal(productId, fromGroupKey);
+      };
+
+      window.openSelectVariantModal = function(productId, fromGroupKey) {
         const p = db.products[productId];
         if(!p) return;
+        lastVariantModalProductId = productId;
+        lastGroupKeyForBack = fromGroupKey || null;
 
         const title = document.getElementById('v-select-title');
         const desc = document.getElementById('v-select-desc');
@@ -958,6 +1075,9 @@
         if (title) title.innerText = p.name;
         if (desc) desc.innerText = "เลือกขนาดสินค้าสำหรับ " + p.name;
         if (emoji) emoji.innerText = p.image || "🏷️";
+
+        const backBtn = document.getElementById('v-modal-back-btn');
+        if (backBtn) backBtn.classList.toggle('hidden', !lastGroupKeyForBack);
 
         const container = document.getElementById('v-select-list');
         if (!container) return;
@@ -985,8 +1105,10 @@
         }
       };
 
-      // ตัวแปรจำค่าล่าสุดไว้ ใช้ตอนกดปุ่ม "ย้อนกลับ" จาก popup เลือกหน่วยไปยัง popup เลือกขนาด
-      let lastVariantModalProductId = null;
+      window.backToGroupModal = function() {
+        window.closeModal('modal-select-variant');
+        if (lastGroupKeyForBack) window.openGroupModal(lastGroupKeyForBack);
+      };
 
       window.onVariantClick = function(productId, variantId) {
         const p = db.products[productId];
@@ -1002,7 +1124,6 @@
         }
 
         // มีตัวเลือกแบ่งขาย เปิด popup ที่สองให้เลือกหน่วย
-        lastVariantModalProductId = productId;
         window.closeModal('modal-select-variant');
         window.openSelectUnitModal(productId, variantId);
       };
@@ -1057,7 +1178,7 @@
       window.backToVariantModal = function() {
         window.closeModal('modal-select-unit');
         if (lastVariantModalProductId) {
-          window.openSelectVariantModal(lastVariantModalProductId);
+          window.openSelectVariantModal(lastVariantModalProductId, lastGroupKeyForBack);
         }
       };
 
