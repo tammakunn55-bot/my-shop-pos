@@ -297,6 +297,8 @@
             <span class="text-sm">🖼️</span>นำเข้ารูป(ชุด)</button>
           <button onclick="window.showView('documents')" class="bg-cyan-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">📎</span>เอกสารทั้งหมด</button>
+          <button onclick="window.openDuplicateCheckModal()" class="bg-orange-500 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
+            <span class="text-sm">🧬</span>ตรวจสินค้าซ้ำ</button>
           <button onclick="window.exportExcel()" class="bg-teal-500 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">📊</span>Excel</button>
         </div>
@@ -343,6 +345,15 @@
               </select>
             </div>
           </div>
+
+          <div id="stock-bulk-action-bar" class="hidden bg-indigo-600 text-white rounded-2xl p-3 mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <span class="font-bold">✅ เลือกไว้ <span id="stock-bulk-count">0</span> รายการ</span>
+            <select id="stock-bulk-category-select" class="text-slate-800 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none"></select>
+            <button onclick="window.applyBulkCategoryChange()" class="bg-white text-indigo-600 px-3 py-1.5 rounded-lg font-bold text-[10px] btn-touch">📁 เปลี่ยนหมวดหมู่ที่เลือก</button>
+            <button onclick="window.applyBulkDelete()" class="bg-rose-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] btn-touch ml-auto">🗑️ ระงับการขายที่เลือก</button>
+            <button onclick="window.stockSelectedProductIds.clear(); window.renderStock();" class="bg-indigo-700 px-3 py-1.5 rounded-lg font-bold text-[10px] btn-touch">ยกเลิกเลือก</button>
+          </div>
+
           <div class="overflow-x-auto">
             <table class="w-full text-left whitespace-nowrap min-w-[500px]">
               <thead class="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b" id="stock-table-head"></thead>
@@ -554,33 +565,89 @@
       <!-- VIEW: PO -->
       <section id="view-po" class="view-content hidden fade-in">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-xl font-extrabold text-slate-800 tracking-tighter">🛒 จัดการรับของเครดิต / เจ้าหนี้ซัพพลายเออร์</h3>
+          <h3 class="text-xl font-extrabold text-slate-800 tracking-tighter">🛒 สั่งของ / รับของ / เจ้าหนี้ซัพพลายเออร์</h3>
           <button onclick="window.showView('stock')" class="text-slate-400 font-bold hover:text-rose-500 transition-colors btn-touch">✕ ปิด</button>
         </div>
 
         <div class="flex gap-2 mb-4 border-b pb-2">
-          <button onclick="window.switchPOTab('CREATE_PO')" id="po-tab-CREATE_PO" class="flex-1 py-2 px-3 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-xs btn-touch">1. ร่างใบรับสินค้าเครดิต</button>
-          <button onclick="window.switchPOTab('PENDING_PO')" id="po-tab-PENDING_PO" class="flex-1 py-2 px-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-xs border btn-touch">2. ประวัติเจ้าหนี้/ดิวค้างจ่าย</button>
+          <button onclick="window.switchPOTab('ORDER')" id="po-tab-ORDER" class="flex-1 py-2 px-2 bg-indigo-600 text-white rounded-xl font-bold text-[10px] shadow-xs btn-touch">1. ใบสั่งของ</button>
+          <button onclick="window.switchPOTab('RECEIVE')" id="po-tab-RECEIVE" class="flex-1 py-2 px-2 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] border btn-touch">2. ตรวจรับของ</button>
+          <button onclick="window.switchPOTab('PENDING_PO')" id="po-tab-PENDING_PO" class="flex-1 py-2 px-2 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] border btn-touch">3. ประวัติ</button>
         </div>
 
-        <div id="po-panel-CREATE_PO" class="space-y-4">
+        <!-- ============ TAB 1: ORDER DRAFT (สั่งของ — ยังไม่กระทบสต็อก) ============ -->
+        <div id="po-panel-ORDER" class="space-y-4">
+          <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-[10px] text-indigo-700 leading-relaxed">
+            📝 ขั้นตอนนี้แค่ <b>"บันทึกว่าเราสั่งอะไรไปบ้าง"</b> เพื่อดูย้อนหลังกันสั่งซ้ำ — ยัง<b>ไม่กระทบสต็อกหรือยอดเจ้าหนี้</b> จนกว่าจะไปตรวจรับของจริงในแท็บที่ 2
+          </div>
+
           <div class="bg-white p-5 rounded-[2rem] border shadow-sm">
             <div class="flex justify-between items-center mb-3">
-              <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">เลือกซัพพลายเออร์ & สินค้าเพื่อรับเครดิตเข้า</h4>
+              <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">สั่งของจากซัพพลายเออร์</h4>
               <button onclick="window.openSupplierManagerModal()" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg btn-touch">👥 จัดการซัพพลายเออร์</button>
             </div>
+            <div class="mb-3">
+              <label class="font-bold text-slate-500 block mb-1 text-xs">เลือกซัพพลายเออร์</label>
+              <select id="order-select-supplier" onchange="window.renderRecentDraftsForSupplier()" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800 text-xs"></select>
+            </div>
+
+            <div id="order-recent-drafts-box" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-[10px] text-amber-800"></div>
+
+            <div class="border-t my-2 pt-2"></div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label class="text-[10px] font-bold text-slate-500 block mb-1">เลือกสินค้า</label>
+                <select id="order-select-product" class="w-full bg-slate-50 border p-3 rounded-xl font-bold text-xs outline-none text-slate-800" onchange="window.onOrderProductSelect()"></select>
+              </div>
+              <div id="order-variant-select-box" class="hidden">
+                <label class="text-[10px] font-bold text-slate-500 block mb-1">เลือกขนาด / รุ่น</label>
+                <select id="order-select-variant" class="w-full bg-slate-50 border p-3 rounded-xl font-bold text-xs outline-none text-slate-800"></select>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <input type="number" id="order-qty" placeholder="จำนวนที่จะสั่ง" class="flex-1 bg-slate-50 border p-3 rounded-xl font-bold text-center text-sm outline-none text-slate-800">
+              <button onclick="window.addToOrderDraft()" class="bg-indigo-600 text-white px-8 rounded-xl font-bold text-xs btn-touch shadow-md">เพิ่มลงใบสั่ง</button>
+            </div>
+          </div>
+
+          <div id="order-draft-items-list" class="space-y-2 mb-6"></div>
+
+          <div id="order-draft-footer" class="hidden space-y-2">
+            <input type="text" id="order-draft-note" placeholder="หมายเหตุ (ถ้ามี เช่น สั่งด่วน/นัดส่งวันไหน)" class="w-full bg-white border p-3 rounded-xl font-bold text-xs outline-none text-slate-800">
+            <button onclick="window.saveOrderDraft()" class="w-full py-5 bg-indigo-700 text-white rounded-[2rem] font-bold shadow-2xl btn-touch text-lg uppercase tracking-tight">📝 บันทึกใบสั่งของ</button>
+          </div>
+        </div>
+
+        <!-- ============ TAB 2: RECEIVE GOODS (ตรวจรับของจริงจากบิล — กระทบสต็อก) ============ -->
+        <div id="po-panel-RECEIVE" class="hidden space-y-4">
+          <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-[10px] text-emerald-700 leading-relaxed">
+            📦 ใช้ตอน<b>ของมาส่งจริง</b> — เทียบกับใบส่งของ/ใบเสร็จของผู้ขาย ตรวจนับจำนวนและราคาให้ตรง แล้วค่อยกดยืนยัน ขั้นตอนนี้จะ<b>อัปเดตสต็อกและตั้งยอดเจ้าหนี้จริง</b>
+          </div>
+
+          <div class="bg-white p-5 rounded-[2rem] border shadow-sm">
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">รับตามใบสั่งของที่บันทึกไว้ (ถ้ามี)</label>
+            <select id="receive-select-draft" onchange="window.onReceiveDraftSelect()" class="w-full bg-slate-50 border p-3 rounded-xl font-bold text-xs outline-none text-slate-800 mb-3">
+              <option value="">-- ไม่มีใบสั่งล่วงหน้า / รับของแบบไม่ได้สั่งไว้ก่อน --</option>
+            </select>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-xs">
               <div>
-                <label class="font-bold text-slate-500 block mb-1">เลือกซัพพลายเออร์/เจ้าหนี้</label>
-                <select id="po-select-supplier" onchange="window.onPOSupplierSelect()" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800">
-                </select>
+                <label class="font-bold text-slate-500 block mb-1">ซัพพลายเออร์/เจ้าหนี้</label>
+                <select id="po-select-supplier" onchange="window.onPOSupplierSelect()" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800"></select>
               </div>
               <div>
                 <label class="font-bold text-slate-500 block mb-1">จำนวนวันเครดิต (เทอม)</label>
                 <input type="number" id="po-supplier-terms" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800" value="30">
               </div>
             </div>
-            
+
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">📷 ถ่ายรูปใบส่งของ/ใบเสร็จของผู้ขาย (แนะนำให้แนบทุกครั้ง)</label>
+            <div class="border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50 hover:bg-slate-100 mb-3" onclick="document.getElementById('receive-photo-input').click()">
+              <span id="receive-photo-status" class="text-xs font-bold text-slate-500">📁 แตะเพื่อเลือกรูปใบส่งของ</span>
+              <input type="file" id="receive-photo-input" class="hidden" accept="image/*" onchange="window.handleReceiptPhotoUpload(event)">
+            </div>
+
             <div class="border-t my-2 pt-2"></div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -594,23 +661,41 @@
               </div>
             </div>
             <div class="flex gap-2">
-              <input type="number" id="po-qty" placeholder="จำนวนหน่วย" class="flex-1 bg-slate-50 border p-3 rounded-xl font-bold text-center text-sm outline-none text-slate-800">
-              <input type="number" id="po-item-cost" placeholder="ราคาทุนต่อหน่วย" class="flex-1 bg-slate-50 border p-3 rounded-xl font-bold text-center text-sm outline-none text-slate-800">
+              <input type="number" id="po-qty" placeholder="จำนวนหน่วย (ตามที่รับจริง)" class="flex-1 bg-slate-50 border p-3 rounded-xl font-bold text-center text-sm outline-none text-slate-800">
+              <input type="number" id="po-item-cost" placeholder="ราคาทุนต่อหน่วย (ตามบิลจริง)" class="flex-1 bg-slate-50 border p-3 rounded-xl font-bold text-center text-sm outline-none text-slate-800">
               <button onclick="window.addToPO()" class="bg-indigo-600 text-white px-8 rounded-xl font-bold text-xs btn-touch shadow-md">เพิ่มรายการ</button>
             </div>
           </div>
           <div id="po-items-list" class="space-y-2 mb-6"></div>
           <div id="po-footer" class="hidden">
-            <button onclick="window.savePurchaseOrder()" class="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-bold shadow-2xl btn-touch text-lg uppercase tracking-tight">บันทึกนำของเข้าคลัง & ตั้งเจ้าหนี้</button>
+            <button onclick="window.savePurchaseOrder()" class="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-bold shadow-2xl btn-touch text-lg uppercase tracking-tight">✅ ยืนยันรับของเข้าคลัง & ตั้งเจ้าหนี้</button>
           </div>
         </div>
 
+        <!-- ============ TAB 3: HISTORY (ใบสั่งของย้อนหลัง + เจ้าหนี้ค้างจ่าย) ============ -->
         <div id="po-panel-PENDING_PO" class="hidden space-y-4">
-          <div class="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex justify-between items-center">
-            <span class="text-xs font-bold text-rose-700">ยอดเจ้าหนี้ค้างชำระรวมทั้งหมด</span>
-            <span id="ap-total-summary" class="text-xl font-black text-rose-600">฿0</span>
+          <div class="flex gap-2 mb-2">
+            <button onclick="window.switchHistorySubTab('DRAFTS')" id="history-subtab-DRAFTS" class="flex-1 py-2 px-2 bg-slate-800 text-white rounded-xl font-bold text-[10px] btn-touch">📝 ใบสั่งของย้อนหลัง</button>
+            <button onclick="window.switchHistorySubTab('AP')" id="history-subtab-AP" class="flex-1 py-2 px-2 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] border btn-touch">💳 เจ้าหนี้/ดิวค้างจ่าย</button>
           </div>
-          <div id="pending-po-list-container" class="space-y-4"></div>
+
+          <div id="history-panel-DRAFTS" class="space-y-3">
+            <div class="bg-white p-3 rounded-2xl border shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <select id="draft-history-supplier-filter" onchange="window.renderOrderDraftHistory()" class="bg-slate-50 border p-3 rounded-xl outline-none font-bold text-slate-800">
+                <option value="ALL">ทุกซัพพลายเออร์</option>
+              </select>
+              <input type="month" id="draft-history-month-filter" onchange="window.renderOrderDraftHistory()" class="bg-slate-50 border p-3 rounded-xl outline-none font-bold text-slate-800">
+            </div>
+            <div id="order-draft-history-list" class="space-y-2"></div>
+          </div>
+
+          <div id="history-panel-AP" class="hidden space-y-4">
+            <div class="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex justify-between items-center">
+              <span class="text-xs font-bold text-rose-700">ยอดเจ้าหนี้ค้างชำระรวมทั้งหมด</span>
+              <span id="ap-total-summary" class="text-xl font-black text-rose-600">฿0</span>
+            </div>
+            <div id="pending-po-list-container" class="space-y-4"></div>
+          </div>
         </div>
       </section>
 
@@ -1389,6 +1474,31 @@
       </div>
     </div>
     
+    <div id="modal-duplicate-check" class="fixed inset-0 z-[140] bg-slate-900/80 flex items-center justify-center p-4 hidden">
+      <div class="bg-white w-full max-w-3xl rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+          <h3 class="text-xl font-black text-slate-800">🧬 ตรวจสอบสินค้าซ้ำ</h3>
+          <button onclick="window.closeModal('modal-duplicate-check')" class="text-slate-400 font-bold hover:text-rose-500 text-xl btn-touch">✕</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">
+          ระบบจะเทียบชื่อสินค้าทุกตัวในระบบ หาคู่ที่ชื่อคล้ายกันมาก (เช่น พิมพ์ผิด/เว้นวรรคต่างกัน) หรือใช้บาร์โค้ดซ้ำกัน แล้วจัดกลุ่มให้ดู — <b>ไม่ลบอะไรอัตโนมัติ</b> คุณเลือกเองว่าจะเก็บตัวไหน/ลบตัวไหน
+        </p>
+        <div class="flex gap-2 mb-4">
+          <label class="text-[10px] font-bold text-slate-500 flex items-center gap-1">ความคล้ายขั้นต่ำ
+            <select id="dup-check-threshold" class="border rounded-lg px-2 py-1 text-[10px] font-bold outline-none">
+              <option value="0.9">สูงมาก (แม่นสุด)</option>
+              <option value="0.8" selected>สูง (แนะนำ)</option>
+              <option value="0.65">ปานกลาง (เจอเยอะขึ้น อาจมีหลอน)</option>
+            </select>
+          </label>
+          <button onclick="window.runDuplicateScan()" class="ml-auto bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-xs btn-touch shadow-md">🔍 เริ่มสแกน</button>
+        </div>
+        <div id="dup-check-results" class="space-y-4">
+          <p class="text-center text-slate-400 text-xs py-10">กด "เริ่มสแกน" เพื่อค้นหาสินค้าที่อาจซ้ำกัน</p>
+        </div>
+      </div>
+    </div>
+
     <div id="modal-bulk-image" class="fixed inset-0 z-[140] bg-slate-900/80 flex items-center justify-center p-4 hidden">
       <div class="bg-white w-full max-w-2xl rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
         <div class="flex justify-between items-center mb-4 border-b pb-3">
@@ -1425,6 +1535,184 @@
         </div>
       </div>
     </div>
+
+    <script>
+    /* ==========================================
+       DUPLICATE PRODUCT SCANNER
+       Finds products that are likely the same item entered twice under
+       slightly different names (typos, spacing, etc.), or that share an
+       identical barcode by mistake. Never deletes anything automatically —
+       always shows the groups and lets the person choose what to keep.
+       ========================================== */
+
+    function levenshteinDistance(a, b) {
+      const m = a.length, n = b.length;
+      if (m === 0) return n;
+      if (n === 0) return m;
+      let prev = Array.from({ length: n + 1 }, (_, i) => i);
+      for (let i = 1; i <= m; i++) {
+        const curr = [i];
+        for (let j = 1; j <= n; j++) {
+          curr[j] = a[i - 1] === b[j - 1]
+            ? prev[j - 1]
+            : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+        }
+        prev = curr;
+      }
+      return prev[n];
+    }
+
+    function normalizeProductName(name) {
+      return (name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function nameSimilarity(a, b) {
+      const na = normalizeProductName(a), nb = normalizeProductName(b);
+      if (!na || !nb) return 0;
+      if (na === nb) return 1;
+      const dist = levenshteinDistance(na, nb);
+      return 1 - dist / Math.max(na.length, nb.length);
+    }
+
+    // Union-Find so that A~B and B~C (even if A!~C directly) end up grouped
+    // together as one cluster — common with near-duplicate name chains.
+    function makeUnionFind(ids) {
+      const parent = {};
+      ids.forEach(id => parent[id] = id);
+      function find(x) { return parent[x] === x ? x : (parent[x] = find(parent[x])); }
+      function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+      return { find, union };
+    }
+
+    window.runDuplicateScan = function () {
+      const resultsEl = document.getElementById('dup-check-results');
+      resultsEl.innerHTML = `<p class="text-center text-slate-400 text-xs py-10">⏳ กำลังสแกน...</p>`;
+
+      // ให้ UI วาดข้อความ "กำลังสแกน" ก่อนเริ่มงานหนัก (O(n²)) ไม่งั้นหน้าจะค้างเงียบๆ ระหว่างคำนวณ
+      setTimeout(() => {
+        const threshold = parseFloat(document.getElementById('dup-check-threshold').value);
+        const products = Object.values(db.products).filter(p => !p.isDeleted);
+
+        // --- 1) ชื่อคล้ายกันมาก ---
+        const uf = makeUnionFind(products.map(p => p.id));
+        for (let i = 0; i < products.length; i++) {
+          for (let j = i + 1; j < products.length; j++) {
+            if (nameSimilarity(products[i].name, products[j].name) >= threshold) {
+              uf.union(products[i].id, products[j].id);
+            }
+          }
+        }
+        const nameGroups = {};
+        products.forEach(p => {
+          const root = uf.find(p.id);
+          (nameGroups[root] = nameGroups[root] || []).push(p);
+        });
+        const nameClusters = Object.values(nameGroups).filter(g => g.length > 1);
+
+        // --- 2) บาร์โค้ดซ้ำข้ามสินค้าคนละตัว (ความมั่นใจสูงมาก — เกิดจากคีย์ผิดเกือบเสมอ) ---
+        const barcodeMap = {};
+        products.forEach(p => {
+          p.variants.forEach(v => {
+            if (!v.barcode || /^AUTO-/.test(v.barcode)) return; // ข้ามบาร์โค้ดที่ระบบสร้างเองอัตโนมัติ
+            (barcodeMap[v.barcode] = barcodeMap[v.barcode] || []).push(p);
+          });
+        });
+        const barcodeClusters = Object.entries(barcodeMap)
+          .filter(([code, plist]) => new Set(plist.map(p => p.id)).size > 1)
+          .map(([code, plist]) => ({ code, products: [...new Map(plist.map(p => [p.id, p])).values()] }));
+
+        window.renderDuplicateScanResults(nameClusters, barcodeClusters);
+      }, 30);
+    };
+
+    window.renderDuplicateScanResults = function (nameClusters, barcodeClusters) {
+      const resultsEl = document.getElementById('dup-check-results');
+
+      if (nameClusters.length === 0 && barcodeClusters.length === 0) {
+        resultsEl.innerHTML = `<p class="text-center text-emerald-600 font-bold text-xs py-10">✅ ไม่พบสินค้าที่น่าจะซ้ำกันเลย</p>`;
+        return;
+      }
+
+      let html = '';
+
+      if (barcodeClusters.length > 0) {
+        html += `<h4 class="text-xs font-bold text-rose-600 mb-2">🚨 บาร์โค้ดซ้ำ (${barcodeClusters.length} กลุ่ม — มั่นใจสูงว่าผิดพลาดจริง)</h4>`;
+        barcodeClusters.forEach((cluster, ci) => {
+          html += window.renderDuplicateClusterHTML(cluster.products, 'bc' + ci, `บาร์โค้ด ${escapeHTML(cluster.code)} ซ้ำกัน`);
+        });
+      }
+
+      if (nameClusters.length > 0) {
+        html += `<h4 class="text-xs font-bold text-amber-600 mt-4 mb-2">🔤 ชื่อคล้ายกันมาก (${nameClusters.length} กลุ่ม — ตรวจสอบก่อนลบ)</h4>`;
+        nameClusters.forEach((cluster, ci) => {
+          html += window.renderDuplicateClusterHTML(cluster, 'nm' + ci, 'ชื่อใกล้เคียงกัน');
+        });
+      }
+
+      resultsEl.innerHTML = html;
+    };
+
+    window.renderDuplicateClusterHTML = function (products, clusterKey, reasonLabel) {
+      const rows = products.map((p, idx) => {
+        const totalStock = p.variants.reduce((s, v) => s + (v.stock || 0), 0);
+        const sizesText = p.variants.map(v => v.sizeName).join(', ');
+        return `
+          <label class="flex items-center gap-2 bg-slate-50 rounded-xl p-2.5 cursor-pointer border-2 border-transparent has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50">
+            <input type="radio" name="dup-keep-${clusterKey}" value="${escapeHTML(p.id)}" ${idx === 0 ? 'checked' : ''} class="w-4 h-4 accent-emerald-600">
+            <div class="flex-1 min-w-0">
+              <b class="text-xs block truncate">${escapeHTML(p.name)}</b>
+              <span class="text-[10px] text-slate-400">ขนาด: ${escapeHTML(sizesText)} • สต็อกรวม: ${totalStock} • หมวด: ${escapeHTML((p.cat || []).join(', ') || '-')}</span>
+            </div>
+          </label>
+        `;
+      }).join('');
+
+      return `
+        <div class="bg-white border rounded-2xl p-4 mb-3 shadow-sm">
+          <p class="text-[10px] text-slate-400 mb-2">${escapeHTML(reasonLabel)} — เลือกตัวที่จะ<b>เก็บไว้</b> (ตัวอื่นจะถูกรวมสต็อกเข้าตัวที่เลือก แล้วระงับการขาย)</p>
+          <div class="space-y-1.5 mb-3">${rows}</div>
+          <div class="flex gap-2">
+            <button onclick="window.mergeDuplicateCluster('${clusterKey}', ${JSON.stringify(products.map(p => p.id)).replace(/"/g, '&quot;')})" class="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold text-[10px] btn-touch">✅ รวมเป็นตัวที่เลือก</button>
+            <button onclick="this.closest('.bg-white.border.rounded-2xl').remove()" class="px-4 py-2 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] btn-touch">ไม่ใช่สินค้าซ้ำ / ข้าม</button>
+          </div>
+        </div>
+      `;
+    };
+
+    window.mergeDuplicateCluster = function (clusterKey, productIds) {
+      const keepId = document.querySelector(`input[name="dup-keep-${clusterKey}"]:checked`).value;
+      const removeIds = productIds.filter(id => id !== keepId);
+      const keepProduct = db.products[keepId];
+      if (!keepProduct) return;
+
+      window.showCustomConfirm(
+        `รวมสินค้า ${removeIds.length + 1} รายการเป็น "${keepProduct.name}"?`,
+        `ขนาด/สต็อกทั้งหมดของอีก ${removeIds.length} รายการจะถูกย้ายมารวมไว้ในสินค้านี้ แล้วระงับการขายรายการที่เหลือ (กู้คืนได้ทีหลังถ้าจำเป็น ไม่ได้ลบถาวร) ราคา/ทุนจะไม่ถูกเปลี่ยนแปลง แค่ย้ายขนาดเข้ามารวมกัน`,
+        () => {
+          removeIds.forEach(rid => {
+            const p = db.products[rid];
+            if (!p) return;
+            p.variants.forEach(v => {
+              // ใส่ชื่อสินค้าดั้งเดิมกำกับไว้ในชื่อขนาด กันสับสนว่าขนาดนี้ย้ายมาจากไหน
+              keepProduct.variants.push({ ...v, id: 'V-' + generateID(), sizeName: `${v.sizeName} (จาก: ${p.name})` });
+            });
+            p.isDeleted = true;
+          });
+          persist();
+          logTransaction('PRODUCT_MERGE_DUPLICATE', { keptId: keepId, removedIds: removeIds });
+          showToast(`รวมสินค้าเรียบร้อย — ตรวจสอบขนาด/ราคาในสินค้า "${keepProduct.name}" อีกครั้งก่อนขายจริง`);
+          if (activeView === 'stock') window.renderStock();
+          window.runDuplicateScan();
+        }
+      );
+    };
+
+    window.openDuplicateCheckModal = function () {
+      document.getElementById('dup-check-results').innerHTML = `<p class="text-center text-slate-400 text-xs py-10">กด "เริ่มสแกน" เพื่อค้นหาสินค้าที่อาจซ้ำกัน</p>`;
+      document.getElementById('modal-duplicate-check').classList.remove('hidden');
+      document.getElementById('modal-duplicate-check').classList.add('flex');
+    };
+    </script>
 
     <script>
     /* Bulk image import tool — uploads many product images to Supabase Storage in one go
@@ -2033,6 +2321,8 @@
       let dangerConfirmAction = null;
       let dangerConfirmPhrase = '';
       let poList = [];
+      let orderDraftList = [];
+      let pendingReceiptPhotoUrl = null;
       let activeView = "sale"; 
       let activeCategory = null; 
       let tempPin = "";
@@ -2047,7 +2337,7 @@
       let currentFacingMode = "environment";
       let activePayMethod = "CASH"; 
       let activeReportTab = 'OVERVIEW'; 
-      let activePOTab = 'CREATE_PO';
+      let activePOTab = 'ORDER';
       
       window.tempCountStorage = {}; 
       const DB_KEY = "smart_pos_pro_v620_db";
@@ -2105,6 +2395,7 @@
           if (!db.suppliers) db.suppliers = DB_DEFAULT.suppliers;
           if (!db.users) db.users = [];
           if (!db.documents) db.documents = [];
+          if (!db.purchaseDrafts) db.purchaseDrafts = [];
           if (db.pinSalt === undefined) db.pinSalt = "";
           db.security = { ...DB_DEFAULT.security, ...(db.security || {}) };
 
@@ -2234,7 +2525,7 @@
         }
 
         if (view === 'po') {
-          window.switchPOTab('CREATE_PO');
+          window.switchPOTab('ORDER');
         }
 
         if (view === 'documents') {
@@ -4003,6 +4294,7 @@
 
       // Column definitions for the spreadsheet-style product table.
       const STOCK_COLUMNS = [
+        { key: 'sel',      label: '',                    filter: null },
         { key: 'cat',      label: '📁 หมวดหมู่',        filter: 'select' },
         { key: 'addVar',   label: '➕ ไซส์/สี',          filter: null },
         { key: 'image',    label: '🖼️ รูป',             filter: null },
@@ -4033,6 +4325,89 @@
       // Pagination Variables
       window.stockCurrentPage = 1;
       window.stockItemsPerPage = 50;
+
+      window.stockSelectedProductIds = new Set();
+      window.stockSortDir = 'asc';
+      const SORTABLE_STOCK_COLS = { name: 'ชื่อ', price: 'ราคาขาย', stock: 'จำนวน', cat: 'หมวดหมู่' };
+
+      window.toggleStockSortColumn = function(colKey) {
+        if (!SORTABLE_STOCK_COLS[colKey]) return;
+        if (stockSortBy === colKey) {
+          window.stockSortDir = window.stockSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          stockSortBy = colKey;
+          window.stockSortDir = 'asc';
+        }
+        window.renderStock();
+      };
+
+      window.toggleSelectAllStockRows = function(checked) {
+        // เลือก/ยกเลิกเลือกเฉพาะสินค้าที่กำลังแสดงอยู่ในตารางตอนนี้ (ตามตัวกรอง/หน้าปัจจุบัน)
+        document.querySelectorAll('.stock-row-checkbox').forEach(cb => {
+          cb.checked = checked;
+          if (checked) window.stockSelectedProductIds.add(cb.dataset.pid);
+          else window.stockSelectedProductIds.delete(cb.dataset.pid);
+        });
+        window.renderStockBulkBar();
+      };
+
+      window.toggleStockRowSelection = function(pid, checked) {
+        if (checked) window.stockSelectedProductIds.add(pid);
+        else window.stockSelectedProductIds.delete(pid);
+        // sync checkbox ทุกแถวของสินค้าตัวเดียวกัน (กรณีมีหลายไซซ์ = หลายแถว)
+        document.querySelectorAll(`.stock-row-checkbox[data-pid="${pid}"]`).forEach(cb => cb.checked = checked);
+        window.renderStockBulkBar();
+      };
+
+      window.renderStockBulkBar = function() {
+        const bar = document.getElementById('stock-bulk-action-bar');
+        if (!bar) return;
+        const n = window.stockSelectedProductIds.size;
+        if (n === 0) { bar.classList.add('hidden'); return; }
+        bar.classList.remove('hidden');
+        document.getElementById('stock-bulk-count').innerText = n;
+        const catSelect = document.getElementById('stock-bulk-category-select');
+        catSelect.innerHTML = db.categories.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
+      };
+
+      window.applyBulkCategoryChange = function() {
+        const newCat = document.getElementById('stock-bulk-category-select').value;
+        if (!newCat) return;
+        const ids = Array.from(window.stockSelectedProductIds);
+        window.showCustomConfirm(
+          `เปลี่ยนหมวดหมู่ ${ids.length} รายการ?`,
+          `จะตั้งหมวดหมู่หลักของสินค้าที่เลือกทั้งหมดเป็น "${newCat}"`,
+          () => {
+            ids.forEach(pid => {
+              const p = db.products[pid];
+              if (!p) return;
+              if (!Array.isArray(p.cat)) p.cat = [];
+              p.cat = [newCat, ...p.cat.filter(c => c.toLowerCase() !== newCat.toLowerCase())];
+            });
+            persist();
+            window.stockSelectedProductIds.clear();
+            window.renderStock();
+            showToast(`เปลี่ยนหมวดหมู่ ${ids.length} รายการเรียบร้อย`);
+          }
+        );
+      };
+
+      window.applyBulkDelete = function() {
+        const ids = Array.from(window.stockSelectedProductIds);
+        if (ids.length === 0) return;
+        window.showCustomConfirm(
+          `⚠️ ระงับการขายสินค้าที่เลือก ${ids.length} รายการ?`,
+          `สินค้าที่เลือกทั้งหมดจะไม่แสดงในหน้าขาย/หน้าคลังอีกต่อไป (ยังกู้คืนได้ทีหลังถ้าจำเป็น ไม่ได้ลบถาวร)`,
+          () => {
+            ids.forEach(pid => { if (db.products[pid]) db.products[pid].isDeleted = true; });
+            persist();
+            logTransaction('BULK_PRODUCT_SUSPEND', { count: ids.length, productIds: ids });
+            window.stockSelectedProductIds.clear();
+            window.renderStock();
+            showToast(`ระงับการขาย ${ids.length} รายการเรียบร้อย`);
+          }
+        );
+      };
 
       window.changeStockPage = function(page) {
         window.stockCurrentPage = page;
@@ -4295,7 +4670,16 @@
         const allCols = window.stockCountMode ? visibleCols.concat(STOCK_COUNT_COLUMNS) : visibleCols;
 
         // Header row (titles)
-        let titleRow = '<tr>' + allCols.map(c => `<th class="p-2.5 align-bottom">${c.label}</th>`).join('') + '</tr>';
+        let titleRow = '<tr>' + allCols.map(c => {
+          if (c.key === 'sel') {
+            return `<th class="p-2.5 align-bottom"><input type="checkbox" onchange="window.toggleSelectAllStockRows(this.checked)" class="w-3.5 h-3.5"></th>`;
+          }
+          if (SORTABLE_STOCK_COLS[c.key]) {
+            const arrow = stockSortBy === c.key ? (window.stockSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+            return `<th class="p-2.5 align-bottom cursor-pointer select-none hover:text-indigo-600" onclick="window.toggleStockSortColumn('${c.key}')">${c.label}${arrow}</th>`;
+          }
+          return `<th class="p-2.5 align-bottom">${c.label}</th>`;
+        }).join('') + '</tr>';
 
         // Filter row (per-column quick filters, google-sheet style)
         let filterRow = '<tr class="bg-white border-t normal-case font-normal">' + allCols.map(c => {
@@ -4344,12 +4728,15 @@
         if (stockSortBy === 'name') {
           flt.sort((a, b) => a.p.name.localeCompare(b.p.name, 'th'));
         } else if (stockSortBy === 'price') {
-          flt.sort((a, b) => b.v.price - a.v.price);
+          flt.sort((a, b) => a.v.price - b.v.price);
         } else if (stockSortBy === 'stock') {
           flt.sort((a, b) => a.v.stock - b.v.stock);
+        } else if (stockSortBy === 'cat') {
+          flt.sort((a, b) => ((a.p.cat && a.p.cat[0]) || '').localeCompare((b.p.cat && b.p.cat[0]) || '', 'th'));
         } else {
           flt.sort((a, b) => b.p.id.localeCompare(a.p.id));
         }
+        if (window.stockSortDir === 'desc') flt.reverse();
 
         // Pagination Logic
         const totalItems = flt.length;
@@ -4385,6 +4772,7 @@
             </span>`).join('');
 
           const cellMap = {
+            sel: `<td class="p-2.5 text-center"><input type="checkbox" class="stock-row-checkbox w-3.5 h-3.5" data-pid="${pid}" ${window.stockSelectedProductIds.has(pid) ? 'checked' : ''} onchange="window.toggleStockRowSelection('${pid}', this.checked)"></td>`,
             cat: `<td class="p-2.5">
                 <select class="text-[10px] font-bold border rounded-lg px-1 py-1 outline-none max-w-[110px]" onchange="window.inlineEditCategory('${pid}', this)">
                   ${catOptionsForRow(p.cat && p.cat[0])}
@@ -4457,6 +4845,7 @@
 
         tbody.innerHTML = rowsHtml + paginationRow;
         updateLowStockBadge();
+        window.renderStockBulkBar();
       };
 
       window.__setStockFilter = function(key, value) {
@@ -5263,23 +5652,45 @@
       // ==========================================
       // PURCHASE ORDERS (PO) & RECEIVING GOODS
       // ==========================================
+      const PO_TAB_ACTIVE_CLASS = 'flex-1 py-2 px-2 bg-indigo-600 text-white rounded-xl font-bold text-[10px] shadow-xs btn-touch';
+      const PO_TAB_INACTIVE_CLASS = 'flex-1 py-2 px-2 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] border btn-touch';
+
       window.switchPOTab = function(tab) {
         activePOTab = tab;
-        document.getElementById('po-tab-CREATE_PO').className = tab === 'CREATE_PO' ? 'flex-1 py-2 px-3 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-xs btn-touch' : 'flex-1 py-2 px-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-xs border btn-touch';
-        document.getElementById('po-tab-PENDING_PO').className = tab === 'PENDING_PO' ? 'flex-1 py-2 px-3 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-xs btn-touch' : 'flex-1 py-2 px-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-xs border btn-touch';
+        ['ORDER', 'RECEIVE', 'PENDING_PO'].forEach(t => {
+          const btn = document.getElementById('po-tab-' + t);
+          if (btn) btn.className = t === tab ? PO_TAB_ACTIVE_CLASS : PO_TAB_INACTIVE_CLASS;
+          const panel = document.getElementById('po-panel-' + t);
+          if (panel) panel.classList.toggle('hidden', t !== tab);
+        });
 
-        if (tab === 'CREATE_PO') {
-          document.getElementById('po-panel-CREATE_PO').classList.remove('hidden');
-          document.getElementById('po-panel-PENDING_PO').classList.add('hidden');
+        const productOptions = `<option value="">-- กรุณาเลือกสินค้า --</option>` +
+          Object.values(db.products).filter(p => !p.isDeleted).map(p => `<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)}</option>`).join('');
 
-          const poSelect = document.getElementById('po-select-product');
-          poSelect.innerHTML = `<option value="">-- กรุณาเลือกสินค้า --</option>` +
-            Object.values(db.products).filter(p => !p.isDeleted).map(p => `<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)}</option>`).join('');
+        if (tab === 'ORDER') {
+          document.getElementById('order-select-product').innerHTML = productOptions;
+          document.getElementById('order-variant-select-box').classList.add('hidden');
+          window.refreshSupplierDropdown();
+          window.renderRecentDraftsForSupplier();
+        } else if (tab === 'RECEIVE') {
+          document.getElementById('po-select-product').innerHTML = productOptions;
           document.getElementById('po-variant-select-box').classList.add('hidden');
           window.refreshSupplierDropdown();
+          window.populateReceiveDraftSelect();
         } else {
-          document.getElementById('po-panel-CREATE_PO').classList.add('hidden');
-          document.getElementById('po-panel-PENDING_PO').classList.remove('hidden');
+          window.switchHistorySubTab('DRAFTS');
+        }
+      };
+
+      window.switchHistorySubTab = function(sub) {
+        document.getElementById('history-subtab-DRAFTS').className = sub === 'DRAFTS' ? PO_TAB_ACTIVE_CLASS.replace('bg-indigo-600', 'bg-slate-800') : PO_TAB_INACTIVE_CLASS;
+        document.getElementById('history-subtab-AP').className = sub === 'AP' ? PO_TAB_ACTIVE_CLASS.replace('bg-indigo-600', 'bg-slate-800') : PO_TAB_INACTIVE_CLASS;
+        document.getElementById('history-panel-DRAFTS').classList.toggle('hidden', sub !== 'DRAFTS');
+        document.getElementById('history-panel-AP').classList.toggle('hidden', sub !== 'AP');
+        if (sub === 'DRAFTS') {
+          window.populateDraftHistorySupplierFilter();
+          window.renderOrderDraftHistory();
+        } else {
           renderPendingPOs();
         }
       };
@@ -5296,6 +5707,105 @@
         } else {
           document.getElementById('po-variant-select-box').classList.add('hidden');
         }
+      };
+
+      // ============ ORDER DRAFT (ใบสั่งของ — ไม่กระทบสต็อก) ============
+      window.onOrderProductSelect = function() {
+        const pid = document.getElementById('order-select-product').value;
+        const p = db.products[pid];
+        if (p && p.variants.length > 0) {
+          document.getElementById('order-select-variant').innerHTML =
+            p.variants.map(v => `<option value="${escapeHTML(v.id)}">${escapeHTML(v.sizeName)} (คลังปัจจุบัน: ${v.stock})</option>`).join('');
+          document.getElementById('order-variant-select-box').classList.remove('hidden');
+        } else {
+          document.getElementById('order-variant-select-box').classList.add('hidden');
+        }
+      };
+
+      window.addToOrderDraft = function() {
+        const pid = document.getElementById('order-select-product').value;
+        const vid = document.getElementById('order-select-variant').value;
+        const qty = roundStock(parseFloat(document.getElementById('order-qty').value));
+
+        if (!pid || !vid || !qty || qty <= 0) return showAlert("กรอกข้อมูลไม่ครบ", "กรุณาเลือกสินค้าและระบุจำนวนที่จะสั่งให้ถูกต้อง", true);
+
+        const p = db.products[pid];
+        const v = p.variants.find(x => x.id === vid);
+        const existing = orderDraftList.find(item => item.productId === pid && item.variantId === vid);
+        if (existing) {
+          existing.qtyOrdered = roundStock(existing.qtyOrdered + qty);
+        } else {
+          orderDraftList.push({ productId: pid, variantId: vid, productName: p.name, sizeName: v.sizeName, qtyOrdered: qty });
+        }
+        document.getElementById('order-qty').value = "";
+        renderOrderDraftItems();
+      };
+
+      function renderOrderDraftItems() {
+        const container = document.getElementById('order-draft-items-list');
+        container.innerHTML = orderDraftList.map((item, idx) => `
+          <div class="bg-white p-3 rounded-xl border flex justify-between items-center text-xs text-slate-800 shadow-sm">
+            <div>
+              <b class="text-sm block">${escapeHTML(item.productName)}</b>
+              <span class="text-slate-400">ขนาด: ${escapeHTML(item.sizeName)}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-black text-indigo-600 text-sm">${item.qtyOrdered} หน่วย</span>
+              <button onclick="orderDraftList.splice(${idx}, 1); renderOrderDraftItems();" class="text-rose-500 text-xl font-bold p-1">&times;</button>
+            </div>
+          </div>
+        `).join('');
+        document.getElementById('order-draft-footer').classList.toggle('hidden', orderDraftList.length === 0);
+      }
+
+      window.saveOrderDraft = function() {
+        if (!guardOnce('saveOrderDraft')) return;
+        const supplierId = document.getElementById('order-select-supplier').value;
+        if (!supplierId) return showAlert("ยังไม่ได้เลือกซัพพลายเออร์", "กรุณาเลือกซัพพลายเออร์ที่จะสั่งของก่อน", true);
+        if (orderDraftList.length === 0) return showAlert("ยังไม่มีรายการ", "กรุณาเพิ่มสินค้าที่จะสั่งอย่างน้อย 1 รายการ", true);
+
+        const draft = {
+          id: 'PD-' + generateID(),
+          time: Date.now(),
+          supplierId,
+          note: document.getElementById('order-draft-note').value.trim(),
+          items: orderDraftList.map(i => ({ ...i })),
+          status: 'PENDING',
+          receivedPoId: null
+        };
+        db.purchaseDrafts.push(draft);
+        persist();
+        if (typeof window.logTransaction === 'function') window.logTransaction('ORDER_DRAFT_CREATED', { draftId: draft.id, supplierId, itemCount: draft.items.length });
+
+        orderDraftList = [];
+        document.getElementById('order-draft-note').value = '';
+        renderOrderDraftItems();
+        window.renderRecentDraftsForSupplier();
+        showToast("บันทึกใบสั่งของเรียบร้อย — ไปตรวจรับของได้ที่แท็บ 2 เมื่อของมาส่งจริง");
+      };
+
+      // แสดงใบสั่งของที่ยังค้างอยู่ (PENDING) ของซัพพลายเออร์ที่เลือก เพื่อกันสั่งซ้ำ
+      window.renderRecentDraftsForSupplier = function() {
+        const box = document.getElementById('order-recent-drafts-box');
+        const supplierId = document.getElementById('order-select-supplier').value;
+        if (!supplierId) { box.classList.add('hidden'); return; }
+
+        const thisMonth = new Date().toISOString().slice(0, 7);
+        const pending = (db.purchaseDrafts || []).filter(d => d.supplierId === supplierId && d.status === 'PENDING');
+        const thisMonthAll = (db.purchaseDrafts || []).filter(d => d.supplierId === supplierId && new Date(d.time).toISOString().slice(0, 7) === thisMonth);
+
+        if (pending.length === 0 && thisMonthAll.length === 0) { box.classList.add('hidden'); return; }
+
+        box.classList.remove('hidden');
+        let html = '';
+        if (pending.length > 0) {
+          html += `<b>🕐 ยังไม่ได้รับของ ${pending.length} ใบ:</b><br>` +
+            pending.map(d => `• ${new Date(d.time).toLocaleDateString('th-TH')}: ${d.items.map(i => i.productName + ' x' + i.qtyOrdered).join(', ')}`).join('<br>');
+        }
+        if (thisMonthAll.length > 0) {
+          html += `${html ? '<br><br>' : ''}<b>📅 เดือนนี้สั่งไปแล้วทั้งหมด ${thisMonthAll.length} ครั้ง</b> (ดูรายละเอียดที่แท็บ "3. ประวัติ")`;
+        }
+        box.innerHTML = html;
       };
 
       window.addToPO = function() {
@@ -5356,6 +5866,65 @@
         document.getElementById('po-footer').classList.toggle('hidden', poList.length === 0);
       }
 
+      // ============ RECEIVE GOODS (ตรวจรับของจริง — กระทบสต็อก) ============
+      let activeReceiveDraftId = null;
+
+      window.populateReceiveDraftSelect = function() {
+        const sel = document.getElementById('receive-select-draft');
+        const pending = (db.purchaseDrafts || []).filter(d => d.status === 'PENDING').sort((a, b) => b.time - a.time);
+        sel.innerHTML = `<option value="">-- ไม่มีใบสั่งล่วงหน้า / รับของแบบไม่ได้สั่งไว้ก่อน --</option>` +
+          pending.map(d => {
+            const sName = db.suppliers[d.supplierId] ? db.suppliers[d.supplierId].name : 'ไม่ระบุ';
+            return `<option value="${escapeHTML(d.id)}">${new Date(d.time).toLocaleDateString('th-TH')} — ${escapeHTML(sName)} (${d.items.length} รายการ)</option>`;
+          }).join('');
+        activeReceiveDraftId = null;
+      };
+
+      window.onReceiveDraftSelect = function() {
+        const draftId = document.getElementById('receive-select-draft').value;
+        activeReceiveDraftId = draftId || null;
+        if (!draftId) return;
+
+        const draft = (db.purchaseDrafts || []).find(d => d.id === draftId);
+        if (!draft) return;
+
+        // เลือกซัพพลายเออร์ให้อัตโนมัติตามใบสั่ง
+        document.getElementById('po-select-supplier').value = draft.supplierId;
+        window.onPOSupplierSelect();
+
+        // เติมรายการที่สั่งไว้ลงในรายการรับของ ให้ผู้ใช้ปรับจำนวน/ราคาให้ตรงกับของจริงที่มาส่ง
+        poList = draft.items.map(i => {
+          const v = db.products[i.productId] && db.products[i.productId].variants.find(x => x.id === i.variantId);
+          return {
+            id: 'PO-ITEM-' + generateID(),
+            productId: i.productId,
+            variantId: i.variantId,
+            productName: i.productName,
+            sizeName: i.sizeName,
+            qty: i.qtyOrdered,
+            cost: v ? v.cost : 0
+          };
+        });
+        renderPOItems();
+        showToast("เติมรายการจากใบสั่งของแล้ว — ปรับจำนวน/ราคาให้ตรงกับของจริงก่อนบันทึก");
+      };
+
+      window.handleReceiptPhotoUpload = async function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const statusEl = document.getElementById('receive-photo-status');
+        statusEl.innerText = '⏳ กำลังอัปโหลด...';
+        try {
+          const url = await window.uploadGenericFileToSupabase(file, 'external-docs');
+          pendingReceiptPhotoUrl = url;
+          statusEl.innerText = '✅ แนบรูปใบส่งของแล้ว (แตะเพื่อเปลี่ยนรูป)';
+        } catch (err) {
+          pendingReceiptPhotoUrl = null;
+          statusEl.innerText = '❌ อัปโหลดไม่สำเร็จ แตะเพื่อลองใหม่';
+          window.showAlert('อัปโหลดรูปไม่สำเร็จ', 'เกิดข้อผิดพลาด: ' + (err.message || err), true);
+        }
+      };
+
       window.savePurchaseOrder = function() {
         if (!guardOnce('savePurchaseOrder')) return;
         if(poList.length === 0) return;
@@ -5385,10 +5954,30 @@
           items: itemsWithSnapshot,
           total: totalCost,
           paidAmount: 0,
-          status: 'UNPAID'
+          status: 'UNPAID',
+          sourceDraftId: activeReceiveDraftId || null,
+          deliveryPhotoUrl: pendingReceiptPhotoUrl || null
         };
 
         db.pos.push(po);
+
+        if (activeReceiveDraftId) {
+          const draft = (db.purchaseDrafts || []).find(d => d.id === activeReceiveDraftId);
+          if (draft) { draft.status = 'RECEIVED'; draft.receivedPoId = poId; }
+        }
+
+        if (pendingReceiptPhotoUrl) {
+          const sName = db.suppliers[supplierId] ? db.suppliers[supplierId].name : '';
+          db.documents.push({
+            id: 'DOC-' + generateID(),
+            title: `ใบส่งของ - ${sName} (${poId})`,
+            category: 'ใบส่งของ/ใบกำกับภาษีจากผู้ขาย',
+            note: `แนบอัตโนมัติจากการรับของ ${poId}`,
+            fileUrl: pendingReceiptPhotoUrl,
+            fileType: 'image/jpeg',
+            time: rDate
+          });
+        }
 
         const priceChanges = [];
         poList.forEach(item => {
@@ -5410,6 +5999,12 @@
         persist();
         logTransaction('PO_RECEIVE', { poId, supplierId, total: totalCost, itemCount: po.items.length });
         poList = [];
+        activeReceiveDraftId = null;
+        pendingReceiptPhotoUrl = null;
+        const photoStatusEl = document.getElementById('receive-photo-status');
+        if (photoStatusEl) photoStatusEl.innerText = '📁 แตะเพื่อเลือกรูปใบส่งของ';
+        const photoInputEl = document.getElementById('receive-photo-input');
+        if (photoInputEl) photoInputEl.value = '';
         renderPOItems();
         if (priceChanges.length > 0) {
           const list = priceChanges.map(c => `• ${c.name} (${c.size}): ${formatMoney(c.oldCost)} → ${formatMoney(c.newCost)} บาท`).join('\n');
@@ -5431,6 +6026,63 @@
             .reduce((sum, po) => sum + (po.total - (po.paidAmount || 0)), 0)
         );
       }
+
+      // ============ ORDER DRAFT HISTORY (ดูย้อนหลังว่าสั่งอะไรไปบ้าง กันสั่งซ้ำ) ============
+      window.populateDraftHistorySupplierFilter = function() {
+        const sel = document.getElementById('draft-history-supplier-filter');
+        const currentVal = sel.value;
+        const suppliers = Object.values(db.suppliers || {});
+        sel.innerHTML = `<option value="ALL">ทุกซัพพลายเออร์</option>` +
+          suppliers.map(s => `<option value="${escapeHTML(s.id)}">${escapeHTML(s.name)}</option>`).join('');
+        if (suppliers.some(s => s.id === currentVal)) sel.value = currentVal;
+      };
+
+      window.renderOrderDraftHistory = function() {
+        const container = document.getElementById('order-draft-history-list');
+        const supplierFilter = document.getElementById('draft-history-supplier-filter').value;
+        const monthFilter = document.getElementById('draft-history-month-filter').value; // "YYYY-MM" หรือว่าง
+
+        let drafts = [...(db.purchaseDrafts || [])].sort((a, b) => b.time - a.time);
+        if (supplierFilter !== 'ALL') drafts = drafts.filter(d => d.supplierId === supplierFilter);
+        if (monthFilter) drafts = drafts.filter(d => new Date(d.time).toISOString().slice(0, 7) === monthFilter);
+
+        if (drafts.length === 0) {
+          container.innerHTML = `<p class="text-center text-slate-400 p-8 font-bold text-xs bg-white rounded-2xl border">ไม่พบใบสั่งของในช่วงที่เลือก</p>`;
+          return;
+        }
+
+        const statusBadge = { PENDING: '⏳ รอรับของ', RECEIVED: '✅ รับของแล้ว', CANCELLED: '🚫 ยกเลิกแล้ว' };
+        const statusClass = { PENDING: 'bg-amber-50 text-amber-500', RECEIVED: 'bg-emerald-50 text-emerald-600', CANCELLED: 'bg-slate-100 text-slate-400' };
+
+        container.innerHTML = drafts.map(d => {
+          const sName = db.suppliers[d.supplierId] ? db.suppliers[d.supplierId].name : 'ซัพพลายเออร์ (ถูกลบแล้ว)';
+          const itemsPreview = d.items.map(i => `<div class="flex justify-between text-[11px] text-slate-500 py-0.5"><span>• ${escapeHTML(i.productName)} (${escapeHTML(i.sizeName)})</span><span>x${i.qtyOrdered}</span></div>`).join('');
+          return `
+            <div class="bg-white p-4 border rounded-2xl shadow-xs text-slate-800">
+              <div class="flex justify-between items-center mb-2 border-b pb-1.5">
+                <div>
+                  <b class="text-xs font-black text-indigo-600">${escapeHTML(d.id)}</b>
+                  <p class="text-[9px] text-slate-400 font-bold mt-0.5">${escapeHTML(sName)} • ${new Date(d.time).toLocaleDateString('th-TH')}</p>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-lg ${statusClass[d.status]} font-bold">${statusBadge[d.status]}</span>
+              </div>
+              <div class="mb-2 space-y-1">${itemsPreview}</div>
+              ${d.note ? `<p class="text-[10px] text-slate-400 italic mb-2">📝 ${escapeHTML(d.note)}</p>` : ''}
+              ${d.status === 'PENDING' ? `<button onclick="window.cancelOrderDraft('${escapeHTML(d.id)}')" class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-lg btn-touch">ยกเลิกใบสั่งนี้</button>` : ''}
+            </div>
+          `;
+        }).join('');
+      };
+
+      window.cancelOrderDraft = function(draftId) {
+        window.showCustomConfirm('ยกเลิกใบสั่งของนี้?', 'จะไม่ถูกนำมาเตือนกันสั่งซ้ำอีก แต่ยังดูประวัติได้', () => {
+          const d = (db.purchaseDrafts || []).find(x => x.id === draftId);
+          if (d) d.status = 'CANCELLED';
+          persist();
+          window.renderOrderDraftHistory();
+          showToast('ยกเลิกใบสั่งของแล้ว');
+        });
+      };
 
       function renderPendingPOs() {
         const apEl = document.getElementById('ap-total-summary');
@@ -5469,6 +6121,7 @@
                 <span>📅 รับของ: ${new Date(po.time).toLocaleDateString('th-TH')}</span>
                 <span>⌛ กำหนดชำระ: ${new Date(po.dueDate).toLocaleDateString('th-TH')}</span>
               </div>
+              ${po.deliveryPhotoUrl ? `<button onclick="window.open('${escapeHTML(po.deliveryPhotoUrl)}', '_blank')" class="w-full mb-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 py-1.5 rounded-lg btn-touch">📷 ดูรูปใบส่งของ</button>` : ''}
               <div class="flex justify-between items-center text-[10px] text-slate-400 border-t pt-2 mt-2">
                 <div>
                   <span>ยอดเต็ม: <b class="text-slate-600">${formatMoney(po.total)}</b></span>
@@ -5619,16 +6272,26 @@
       window.supplierUnpaidTotal = supplierUnpaidTotal;
 
       function refreshSupplierDropdown() {
-        const sel = document.getElementById('po-select-supplier');
-        if (!sel) return;
-        const currentVal = sel.value;
         const suppliers = Object.values(db.suppliers || {});
-        sel.innerHTML = suppliers.length === 0
+        const optsHtml = suppliers.length === 0
           ? `<option value="">-- ยังไม่มีซัพพลายเออร์ กด "จัดการซัพพลายเออร์" เพื่อเพิ่ม --</option>`
           : suppliers.map(s => `<option value="${escapeHTML(s.id)}">${escapeHTML(s.name)}</option>`).join('');
-        if (suppliers.some(s => s.id === currentVal)) sel.value = currentVal;
-        const selected = db.suppliers[sel.value];
-        if (selected) document.getElementById('po-supplier-terms').value = selected.terms || 30;
+
+        const sel = document.getElementById('po-select-supplier');
+        if (sel) {
+          const currentVal = sel.value;
+          sel.innerHTML = optsHtml;
+          if (suppliers.some(s => s.id === currentVal)) sel.value = currentVal;
+          const selected = db.suppliers[sel.value];
+          if (selected) document.getElementById('po-supplier-terms').value = selected.terms || 30;
+        }
+
+        const orderSel = document.getElementById('order-select-supplier');
+        if (orderSel) {
+          const currentVal2 = orderSel.value;
+          orderSel.innerHTML = optsHtml;
+          if (suppliers.some(s => s.id === currentVal2)) orderSel.value = currentVal2;
+        }
       }
       window.refreshSupplierDropdown = refreshSupplierDropdown;
 
@@ -6309,20 +6972,26 @@
                   }
                 }
 
-                // Resolve the row's category name to an existing category (case-insensitive
-                // match), or create a new one on the fly — hardware-store catalogs from a
+                // Resolve the row's category tag(s) to existing categories (case-insensitive
+                // match), or create new ones on the fly — hardware-store catalogs from a
                 // supplier commonly introduce categories the store hasn't set up yet.
-                let categoryName = 'งานทั่วไป';
+                // Supports multiple tags in one cell separated by commas, matching how
+                // window.exportExcel() writes multi-category products back out (so a
+                // round-trip export → re-import doesn't collapse tags into one garbage
+                // category literally named "TagA, TagB").
+                let resolvedCategoryNames = [];
                 if (item.category) {
-                  const existingCat = db.categories.find(c => c.name.toLowerCase() === item.category.toLowerCase());
-                  if (existingCat) {
-                    categoryName = existingCat.name;
-                  } else {
-                    categoryName = item.category;
+                  resolvedCategoryNames = item.category.split(',').map(c => c.trim()).filter(Boolean).map(rawCat => {
+                    const existingCat = db.categories.find(c => c.name.toLowerCase() === rawCat.toLowerCase());
+                    if (existingCat) return existingCat.name;
                     db.counters.category++;
-                    db.categories.push({ id: 'CAT-' + String(db.counters.category).padStart(2, '0'), name: categoryName, icon: '📦', color: '#6366f1' });
-                  }
+                    const newCat = { id: 'CAT-' + String(db.counters.category).padStart(2, '0'), name: rawCat, icon: '📦', color: '#6366f1' };
+                    db.categories.push(newCat);
+                    return newCat.name;
+                  });
                 }
+                if (resolvedCategoryNames.length === 0) resolvedCategoryNames = ['งานทั่วไป'];
+                const categoryName = resolvedCategoryNames[0]; // ใช้ตัวแรกไว้เทียบตอนอัปเดตสินค้าเดิม (ดูด้านล่าง)
 
                 // Match by name across ALL products, including ones currently suspended
                 // (isDeleted) — otherwise re-importing a discontinued item's stock file
@@ -6333,9 +7002,11 @@
                 if (existingProduct) {
                   if (existingProduct.isDeleted) existingProduct.isDeleted = false;
                   if (!Array.isArray(existingProduct.cat)) existingProduct.cat = [];
-                  if (item.category && !existingProduct.cat.some(c => c.toLowerCase() === categoryName.toLowerCase())) {
-                    existingProduct.cat.push(categoryName);
-                  }
+                  resolvedCategoryNames.forEach(catName => {
+                    if (!existingProduct.cat.some(c => c.toLowerCase() === catName.toLowerCase())) {
+                      existingProduct.cat.push(catName);
+                    }
+                  });
                   // อัปเดตกลุ่มสินค้าเฉพาะเมื่อไฟล์ระบุค่ามาจริงๆ (ไม่เขียนทับด้วยค่าว่างถ้าช่องนี้ไม่ได้กรอก
                   // ในไฟล์ที่นำเข้า เพื่อไม่ให้การนำเข้าซ้ำไปลบการจัดกลุ่มที่ตั้งไว้ในระบบโดยไม่ตั้งใจ)
                   if (item.groupName) existingProduct.groupName = item.groupName;
@@ -6355,7 +7026,7 @@
                   }
                 } else {
                   db.products[item.id] = {
-                    id: item.id, name: item.name, cat: [categoryName], groupName: item.groupName || '', image: "📦", isDeleted: false, variants: [
+                    id: item.id, name: item.name, cat: resolvedCategoryNames, groupName: item.groupName || '', image: "📦", isDeleted: false, variants: [
                       { id: 'V-' + generateID(), sizeName: item.sizeName, barcode: barcode, cost: item.cost, price: item.price, stock: roundStock(item.stock), minStock: item.minStock, fractions: [] }
                     ]
                   };
