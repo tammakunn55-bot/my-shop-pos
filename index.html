@@ -299,6 +299,12 @@
             <span class="text-sm">📎</span>เอกสารทั้งหมด</button>
           <button onclick="window.openDuplicateCheckModal()" class="bg-orange-500 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">🧬</span>ตรวจสินค้าซ้ำ</button>
+          <button onclick="window.openRunCodeModal()" class="bg-teal-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
+            <span class="text-sm">🔢</span>รันรหัสสินค้า</button>
+          <button onclick="window.openAutoGroupModal()" class="bg-sky-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
+            <span class="text-sm">🔗</span>จัดกลุ่มสินค้า</button>
+          <button onclick="window.openCleanupImagesModal()" class="bg-rose-500 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
+            <span class="text-sm">🧹</span>ล้างรูปไม่ใช้</button>
           <button onclick="window.exportExcel()" class="bg-teal-500 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">📊</span>Excel</button>
         </div>
@@ -1474,6 +1480,77 @@
       </div>
     </div>
     
+    <div id="modal-cleanup-images" class="fixed inset-0 z-[140] bg-slate-900/80 flex items-center justify-center p-4 hidden">
+      <div class="bg-white w-full max-w-3xl rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+          <h3 class="text-xl font-black text-slate-800">🧹 ล้างรูปที่ไม่ได้ใช้แล้ว</h3>
+          <button onclick="window.closeModal('modal-cleanup-images')" class="text-slate-400 font-bold hover:text-rose-500 text-xl btn-touch">✕</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">
+          หารูปที่อัปโหลดไว้ใน Supabase Storage แต่ตอนนี้<b>ไม่มีสินค้าตัวไหนใช้อยู่แล้ว</b> (เช่น หลังจากรวมสินค้าที่เคยแยกการ์ดกันเป็นกลุ่มเดียว รูปของตัวที่ถูกรวมจะเหลือค้างไว้เฉยๆ) ลบได้อย่างปลอดภัยเพื่อประหยัดพื้นที่ — สินค้าที่ยังใช้รูปอยู่จะไม่ถูกแตะ
+        </p>
+        <button onclick="window.scanOrphanedImages()" class="bg-rose-500 text-white px-4 py-2 rounded-xl font-bold text-xs btn-touch shadow-md mb-4 self-start">🔍 เริ่มสแกน</button>
+        <div id="cleanup-images-results" class="space-y-3">
+          <p class="text-center text-slate-400 text-xs py-10">กด "เริ่มสแกน" เพื่อหารูปที่ไม่มีสินค้าใช้แล้ว</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-auto-group" class="fixed inset-0 z-[140] bg-slate-900/80 flex items-center justify-center p-4 hidden">
+      <div class="bg-white w-full max-w-3xl rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+          <h3 class="text-xl font-black text-slate-800">🔗 จัดกลุ่มสินค้าหลายขนาดอัตโนมัติ</h3>
+          <button onclick="window.closeModal('modal-auto-group')" class="text-slate-400 font-bold hover:text-rose-500 text-xl btn-touch">✕</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">
+          ระบบจะหาสินค้าที่ชื่อเหมือนกันทุกอย่างยกเว้น<b>ขนาด</b> (เช่น "ท่อพีวีซี ขนาด 1 นิ้ว" กับ "ท่อพีวีซี ขนาด 1/2 นิ้ว") แล้วเสนอให้รวมเป็น<b>การ์ดเดียว</b>ที่มีตัวเลือกขนาดในนั้น (แบบภาพตัวอย่างที่ส่งมา) — ตรวจสอบก่อนกด "รวมกลุ่มนี้" เสมอ สินค้าที่จัดกลุ่มไว้แล้วจะไม่ถูกแตะ
+        </p>
+        <button onclick="window.runAutoGroupScan()" class="bg-teal-600 text-white px-4 py-2 rounded-xl font-bold text-xs btn-touch shadow-md mb-4 self-start">🔍 เริ่มสแกน</button>
+        <div id="auto-group-results" class="space-y-4">
+          <p class="text-center text-slate-400 text-xs py-10">กด "เริ่มสแกน" เพื่อค้นหาสินค้าที่น่าจะเป็นขนาดเดียวกัน</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-run-code" class="fixed inset-0 z-[140] bg-slate-900/80 flex items-center justify-center p-4 hidden">
+      <div class="bg-white w-full max-w-md rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+          <h3 class="text-xl font-black text-slate-800">🔢 รันรหัสสินค้าอัตโนมัติ</h3>
+          <button onclick="window.closeModal('modal-run-code')" class="text-slate-400 font-bold hover:text-rose-500 text-xl btn-touch">✕</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">
+          ตั้งรหัสสินค้า (SKU) ให้เรียงลำดับอัตโนมัติทั้งร้าน เรียงตามชื่อสินค้า ก-ฮ เหมาะสำหรับพิมพ์ป้ายราคา/จัดชั้นวางให้เป็นระบบ
+        </p>
+        <div class="space-y-3 mb-4">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">คำนำหน้ารหัส (ถ้ามี)</label>
+            <input type="text" id="run-code-prefix" placeholder="เช่น A- หรือเว้นว่างไว้ก็ได้" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800 text-xs">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] font-bold text-slate-500 block mb-1">เริ่มจากเลข</label>
+              <input type="number" id="run-code-start" value="1" min="0" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800 text-xs">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-slate-500 block mb-1">จำนวนหลัก (เติม 0)</label>
+              <input type="number" id="run-code-digits" value="4" min="1" max="8" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800 text-xs">
+            </div>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">ขอบเขต</label>
+            <select id="run-code-scope" class="w-full bg-slate-50 border p-3 rounded-xl font-bold outline-none text-slate-800 text-xs">
+              <option value="MISSING">เฉพาะสินค้าที่ยังไม่มีรหัส (ปลอดภัย ไม่แตะของเดิม)</option>
+              <option value="ALL">ทั้งหมด (เขียนทับรหัสเดิมทุกตัว)</option>
+            </select>
+          </div>
+          <div class="bg-teal-50 border border-teal-200 rounded-xl p-3 text-[10px] text-teal-700">
+            ตัวอย่างผลลัพธ์: <b id="run-code-preview">A-0001, A-0002, A-0003 ...</b>
+          </div>
+        </div>
+        <button onclick="window.runAutoProductCode()" class="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold shadow-xl btn-touch text-sm">▶️ เริ่มรันรหัส</button>
+      </div>
+    </div>
+
     <div id="modal-duplicate-check" class="fixed inset-0 z-[140] bg-slate-900/80 flex items-center justify-center p-4 hidden">
       <div class="bg-white w-full max-w-3xl rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto no-scrollbar">
         <div class="flex justify-between items-center mb-4 border-b pb-3">
@@ -1715,6 +1792,247 @@
     </script>
 
     <script>
+    /* ==========================================
+       AUTO PRODUCT CODE GENERATOR (รันรหัสสินค้า)
+       Assigns clean sequential codes (e.g. A-0001, A-0002...) across the
+       whole catalog, ordered alphabetically by name — mainly for printing
+       shelf labels / price tags. Read-only preview updates live as the
+       person types, real changes only happen after pressing "เริ่มรันรหัส".
+       ========================================== */
+    function computeRunCodePreview() {
+      const prefix = document.getElementById('run-code-prefix').value.trim();
+      const start = parseInt(document.getElementById('run-code-start').value) || 0;
+      const digits = parseInt(document.getElementById('run-code-digits').value) || 4;
+      const samples = [0, 1, 2].map(i => prefix + String(start + i).padStart(digits, '0'));
+      document.getElementById('run-code-preview').innerText = samples.join(', ') + ' ...';
+    }
+    ['run-code-prefix', 'run-code-start', 'run-code-digits'].forEach(id => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', computeRunCodePreview);
+      });
+    });
+
+    window.openRunCodeModal = function () {
+      computeRunCodePreview();
+      document.getElementById('modal-run-code').classList.remove('hidden');
+      document.getElementById('modal-run-code').classList.add('flex');
+    };
+
+    window.runAutoProductCode = function () {
+      const prefix = document.getElementById('run-code-prefix').value.trim();
+      const start = parseInt(document.getElementById('run-code-start').value) || 0;
+      const digits = parseInt(document.getElementById('run-code-digits').value) || 4;
+      const scope = document.getElementById('run-code-scope').value; // MISSING | ALL
+
+      let products = Object.values(db.products).filter(p => !p.isDeleted);
+      products.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+      if (scope === 'MISSING') products = products.filter(p => !p.code);
+
+      if (products.length === 0) {
+        return window.showAlert('ไม่มีรายการให้รัน', scope === 'MISSING' ? 'สินค้าทุกตัวมีรหัสอยู่แล้ว' : 'ไม่พบสินค้าในระบบ', true);
+      }
+
+      window.showCustomConfirm(
+        `รันรหัสสินค้า ${products.length} รายการ?`,
+        scope === 'ALL'
+          ? `⚠️ จะเขียนทับรหัสเดิมของสินค้าทั้งหมด ${products.length} รายการด้วยรหัสใหม่ที่เรียงตามชื่อ ก-ฮ การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะสำรองข้อมูลเป็นไฟล์ดาวน์โหลดให้ก่อนเสมอ)`
+          : `จะตั้งรหัสใหม่ให้เฉพาะสินค้า ${products.length} รายการที่ยังไม่มีรหัส เรียงตามชื่อ ก-ฮ`,
+        () => {
+          if (scope === 'ALL' && typeof downloadJSONFile === 'function') {
+            downloadJSONFile(db, 'BeforeRunCode_Safety');
+          }
+          products.forEach((p, idx) => {
+            p.code = prefix + String(start + idx).padStart(digits, '0');
+          });
+          persist();
+          logTransaction('BULK_PRODUCT_CODE_RUN', { count: products.length, scope, prefix, start, digits });
+          window.closeModal('modal-run-code');
+          if (activeView === 'stock') window.renderStock();
+          showToast(`รันรหัสสินค้าเรียบร้อย ${products.length} รายการ`);
+        }
+      );
+    };
+    </script>
+
+    <script>
+    /* ==========================================
+       AUTO GROUP BY SIZE VARIANT (จัดกลุ่มสินค้าหลายขนาด)
+       Finds products whose names are identical except for a size token
+       (ขนาด 1", 1/2 นิ้ว, 3/4", 20มม. etc.) and offers to combine them
+       into one shared card (groupName) with a size picker, instead of
+       showing every size as its own separate product card. Never applies
+       automatically — always shown for review first, and skips products
+       that already belong to a group so it won't disturb manual grouping.
+       ========================================== */
+    function extractGroupBaseName(name) {
+      let base = name || '';
+      // ตัดรูปแบบ "ขนาด <ตัวเลข/เศษส่วน> <หน่วย>" เช่น "ขนาด 1 นิ้ว", "ขนาด 1/2\"", "ขนาด 20มม."
+      base = base.replace(/ขนาด\s*\d+(\.\d+)?(\/\d+)?\s*(["'”]|นิ้ว|มม\.?|ซม\.?|ม\.?|mm|cm|m)?/gi, ' ');
+      // ตัดเลขขนาดที่ไม่มีคำว่า "ขนาด" นำหน้าแต่ติดหน่วยอยู่ เช่น "... 1\"", "... 1/2 นิ้ว", "... 20มม."
+      base = base.replace(/\d+(\.\d+)?(\/\d+)?\s*(["'”]|นิ้ว|มม\.?|ซม\.?|mm|cm)\b/gi, ' ');
+      // ตัดเบอร์/เกรดท้ายชื่อ เช่น "#80", "#100 หยาบสุด", "#1000 ละเอียดที่สุด" — พบบ่อยในกระดาษทราย/
+      // ดอกสว่าน/ใบตัด ที่เว็บซัพพลายเออร์แยกเป็นคนละการ์ดต่อเบอร์ ทั้งที่จริงคือสินค้าเดียวกัน
+      base = base.replace(/#\s*\d+.*$/i, ' ');
+      base = base.replace(/\s+/g, ' ').trim();
+      return base;
+    }
+
+    window.openAutoGroupModal = function () {
+      document.getElementById('auto-group-results').innerHTML = `<p class="text-center text-slate-400 text-xs py-10">กด "เริ่มสแกน" เพื่อค้นหาสินค้าที่น่าจะเป็นขนาดเดียวกัน</p>`;
+      document.getElementById('modal-auto-group').classList.remove('hidden');
+      document.getElementById('modal-auto-group').classList.add('flex');
+    };
+
+    window.runAutoGroupScan = function () {
+      const products = Object.values(db.products).filter(p => !p.isDeleted && !(p.groupName || '').trim());
+      const buckets = {};
+      products.forEach(p => {
+        const base = extractGroupBaseName(p.name);
+        // ข้ามชื่อที่ตัดขนาดออกแล้วสั้นเกินไป (เสี่ยงจับคู่มั่ว) หรือตัดแล้วเหมือนเดิมทุกตัวอักษร (ไม่มีขนาดให้ตัด)
+        if (base.length < 4 || base.toLowerCase() === p.name.toLowerCase().trim()) return;
+        const key = base.toLowerCase();
+        (buckets[key] = buckets[key] || { base, members: [] }).members.push(p);
+      });
+
+      const candidates = Object.values(buckets).filter(b => b.members.length > 1);
+      window.renderAutoGroupResults(candidates);
+    };
+
+    window.renderAutoGroupResults = function (candidates) {
+      const container = document.getElementById('auto-group-results');
+      if (candidates.length === 0) {
+        container.innerHTML = `<p class="text-center text-emerald-600 font-bold text-xs py-10">✅ ไม่พบสินค้าที่น่าจะต้องจัดกลุ่มเพิ่มเติม</p>`;
+        return;
+      }
+      container.innerHTML = candidates.map((c, ci) => {
+        const rows = c.members.map(p => `
+          <label class="flex items-center gap-2 bg-slate-50 rounded-xl p-2 cursor-pointer">
+            <input type="checkbox" class="auto-group-member-${ci} w-4 h-4 accent-sky-600" value="${escapeHTML(p.id)}" checked>
+            <span class="text-xs flex-1 truncate">${escapeHTML(p.name)}</span>
+            <span class="text-[10px] text-slate-400">฿${(p.variants[0] && p.variants[0].price) || 0}</span>
+          </label>
+        `).join('');
+        return `
+          <div class="bg-white border rounded-2xl p-4 shadow-sm">
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">ชื่อกลุ่ม (แก้ไขได้ก่อนรวม)</label>
+            <input type="text" id="auto-group-name-${ci}" value="${escapeHTML(c.base)}" class="w-full bg-slate-50 border p-2 rounded-xl font-bold text-xs outline-none text-slate-800 mb-2">
+            <div class="space-y-1 mb-3">${rows}</div>
+            <button onclick="window.applyAutoGroup(${ci}, ${JSON.stringify(c.members.map(p => p.id)).replace(/"/g, '&quot;')})" class="w-full py-2 bg-sky-600 text-white rounded-xl font-bold text-[10px] btn-touch">🔗 รวมกลุ่มนี้</button>
+          </div>
+        `;
+      }).join('');
+    };
+
+    window.applyAutoGroup = function (ci, allIds) {
+      const checkedIds = Array.from(document.querySelectorAll(`.auto-group-member-${ci}:checked`)).map(el => el.value);
+      if (checkedIds.length < 2) return window.showAlert('เลือกน้อยเกินไป', 'ต้องเลือกอย่างน้อย 2 รายการถึงจะรวมกลุ่มได้', true);
+      const groupName = document.getElementById(`auto-group-name-${ci}`).value.trim();
+      if (!groupName) return window.showAlert('ยังไม่ได้ตั้งชื่อกลุ่ม', 'กรุณาตั้งชื่อกลุ่มก่อนรวม', true);
+
+      checkedIds.forEach(pid => { if (db.products[pid]) db.products[pid].groupName = groupName; });
+      persist();
+      logTransaction('AUTO_GROUP_PRODUCTS', { groupName, productIds: checkedIds });
+      showToast(`รวม "${groupName}" เรียบร้อย ${checkedIds.length} รายการ`);
+      renderAll();
+      window.runAutoGroupScan(); // สแกนใหม่ ตัดกลุ่มที่เพิ่งรวมไปแล้วออก
+    };
+    </script>
+
+    <script>
+    /* ==========================================
+       ORPHANED IMAGE CLEANUP (ล้างรูปที่ไม่ได้ใช้แล้ว)
+       Lists every file in the product-images Storage bucket and compares
+       it against every imageUrl currently in use by an active product.
+       Anything left over (typically leftover photos from products that
+       got merged/grouped together, since merging only touches the app's
+       own data — it never deletes the actual Storage file) is shown for
+       manual, confirmed deletion. Never deletes anything automatically.
+       ========================================== */
+    window.openCleanupImagesModal = function () {
+      document.getElementById('cleanup-images-results').innerHTML = `<p class="text-center text-slate-400 text-xs py-10">กด "เริ่มสแกน" เพื่อหารูปที่ไม่มีสินค้าใช้แล้ว</p>`;
+      document.getElementById('modal-cleanup-images').classList.remove('hidden');
+      document.getElementById('modal-cleanup-images').classList.add('flex');
+    };
+
+    window.scanOrphanedImages = async function () {
+      const resultsEl = document.getElementById('cleanup-images-results');
+      resultsEl.innerHTML = `<p class="text-center text-slate-400 text-xs py-10">⏳ กำลังสแกน Supabase Storage...</p>`;
+      try {
+        const client = getSupabaseClient();
+        const { data: files, error } = await client.storage.from('product-images').list('', { limit: 5000 });
+        if (error) throw error;
+
+        const usedUrls = new Set(
+          Object.values(db.products)
+            .filter(p => !p.isDeleted && p.imageUrl)
+            .map(p => p.imageUrl)
+        );
+
+        const orphaned = (files || [])
+          .filter(f => f.name) // ข้าม placeholder โฟลเดอร์ที่ Supabase คืนมาบางครั้ง
+          .map(f => {
+            const { data } = client.storage.from('product-images').getPublicUrl(f.name);
+            return { name: f.name, url: data.publicUrl, sizeKB: f.metadata && f.metadata.size ? Math.round(f.metadata.size / 1024) : null };
+          })
+          .filter(f => !usedUrls.has(f.url));
+
+        window.renderOrphanedImagesResult(orphaned);
+      } catch (err) {
+        resultsEl.innerHTML = `<p class="text-center text-rose-500 text-xs py-10">เกิดข้อผิดพลาด: ${escapeHTML(err.message || String(err))}</p>`;
+      }
+    };
+
+    window.renderOrphanedImagesResult = function (orphaned) {
+      const resultsEl = document.getElementById('cleanup-images-results');
+      if (orphaned.length === 0) {
+        resultsEl.innerHTML = `<p class="text-center text-emerald-600 font-bold text-xs py-10">✅ ไม่มีรูปที่ไม่ได้ใช้เลย พื้นที่สะอาดแล้ว</p>`;
+        return;
+      }
+      const totalKB = orphaned.reduce((s, f) => s + (f.sizeKB || 0), 0);
+      resultsEl.innerHTML = `
+        <div class="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
+          <span class="text-xs font-bold text-amber-700">พบรูปไม่ได้ใช้ ${orphaned.length} ไฟล์ (~${(totalKB / 1024).toFixed(1)} MB)</span>
+          <div class="flex gap-2">
+            <button onclick="document.querySelectorAll('.orphan-img-checkbox').forEach(c=>c.checked=true)" class="text-[10px] font-bold text-amber-700 underline">เลือกทั้งหมด</button>
+            <button onclick="window.deleteSelectedOrphanedImages()" class="bg-rose-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] btn-touch">🗑️ ลบที่เลือก</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          ${orphaned.map(f => `
+            <label class="relative block cursor-pointer">
+              <input type="checkbox" class="orphan-img-checkbox absolute top-1 left-1 w-4 h-4 z-10" value="${escapeHTML(f.name)}">
+              <img src="${escapeHTML(f.url)}" class="w-full h-20 object-cover rounded-lg border" loading="lazy">
+              <span class="text-[8px] text-slate-400 block truncate">${f.sizeKB ? f.sizeKB + ' KB' : ''}</span>
+            </label>
+          `).join('')}
+        </div>
+      `;
+    };
+
+    window.deleteSelectedOrphanedImages = function () {
+      const names = Array.from(document.querySelectorAll('.orphan-img-checkbox:checked')).map(el => el.value);
+      if (names.length === 0) return window.showAlert('ยังไม่ได้เลือก', 'กรุณาเลือกรูปที่จะลบก่อน', true);
+      window.showCustomConfirm(
+        `ลบรูป ${names.length} ไฟล์?`,
+        'ลบแล้วกู้คืนไม่ได้ — เฉพาะรูปที่ไม่มีสินค้าตัวไหนใช้อยู่แล้วเท่านั้น',
+        async () => {
+          try {
+            const client = getSupabaseClient();
+            const { error } = await client.storage.from('product-images').remove(names);
+            if (error) throw error;
+            showToast(`ลบรูปเรียบร้อย ${names.length} ไฟล์`);
+            window.scanOrphanedImages();
+          } catch (err) {
+            window.showAlert('ลบไม่สำเร็จ', 'เกิดข้อผิดพลาด: ' + (err.message || err), true);
+          }
+        }
+      );
+    };
+    </script>
+
+    <script>
+
     /* Bulk image import tool — uploads many product images to Supabase Storage in one go
        and attaches each to the matching product by name, instead of one-by-one manually. */
     window.startBulkImageImport = async function () {
@@ -2088,6 +2406,29 @@
       // UTILITIES & CONSTANTS
       // ==========================================
       const roundAmt = (num) => Math.round((parseFloat(num) || 0) * 100) / 100;
+
+      // เรียงชื่อแบบ "เข้าใจตัวเลข" (natural sort) — ตัดชื่อเป็นท่อนตัวอักษร/ตัวเลขสลับกัน แล้ว
+      // เทียบท่อนตัวเลขด้วยค่าจริง ไม่ใช่เทียบตัวอักษรทีละตัว จึงได้ "#80" มาก่อน "#100" เสมอ
+      // (เทียบตัวอักษรตรงๆ จะได้ "#100" มาก่อน "#80" เพราะ '1' < '8') และพา่ที่ชื่อฐานเดียวกัน
+      // (เช่น สินค้าเบอร์/ไซซ์ต่างกันของรุ่นเดียวกัน) ให้เรียงติดกันในตารางโดยอัตโนมัติ
+      function naturalCompare(a, b) {
+        const chunk = s => (s || '').toString().match(/\d+|\D+/g) || [];
+        const ca = chunk(a), cb = chunk(b);
+        const len = Math.max(ca.length, cb.length);
+        for (let i = 0; i < len; i++) {
+          const xa = ca[i] || '', xb = cb[i] || '';
+          const na = /^\d+$/.test(xa), nb = /^\d+$/.test(xb);
+          if (na && nb) {
+            const diff = parseInt(xa, 10) - parseInt(xb, 10);
+            if (diff !== 0) return diff;
+          } else {
+            const diff = xa.localeCompare(xb, 'th');
+            if (diff !== 0) return diff;
+          }
+        }
+        return 0;
+      }
+      window.naturalCompare = naturalCompare;
       const roundStock = (num) => Math.round((parseFloat(num) || 0) * 10000) / 10000;
       const formatMoney = (val) => "฿" + roundAmt(val).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       const generateID = () => Date.now().toString(36).toUpperCase() + Math.random().toString(36).substr(2, 4).toUpperCase();
@@ -2923,7 +3264,7 @@
         if (catTitle) catTitle.innerText = catName;
         if (ps) ps.classList.remove('hidden');
 
-        const filteredProducts = Object.values(db.products).filter(p => !p.isDeleted && p.cat && p.cat.includes(catName));
+        const filteredProducts = Object.values(db.products).filter(p => !p.isDeleted && p.cat && p.cat.includes(catName)).sort((a, b) => naturalCompare(a.name, b.name));
         renderProductGrid(filteredProducts);
       };
 
@@ -2951,7 +3292,7 @@
           const matchGroup = p.groupName && p.groupName.toLowerCase().includes(query);
           const matchBarcode = p.variants && p.variants.some(v => v.barcode && v.barcode.toLowerCase().includes(query));
           return matchName || matchGroup || matchBarcode;
-        });
+        }).sort((a, b) => naturalCompare(a.name, b.name));
 
         const exactMatchBarcodeItem = [];
         matches.forEach(prod => {
@@ -3092,7 +3433,7 @@
 
       window.openGroupModal = function(groupKey) {
         const gKeyLower = groupKey.toLowerCase();
-        const members = Object.values(db.products).filter(x => !x.isDeleted && (x.groupName || '').trim().toLowerCase() === gKeyLower);
+        const members = Object.values(db.products).filter(x => !x.isDeleted && (x.groupName || '').trim().toLowerCase() === gKeyLower).sort((a, b) => naturalCompare(a.name, b.name));
         if (members.length === 0) return;
 
         const title = document.getElementById('g-select-title');
@@ -4726,7 +5067,7 @@
         document.getElementById('stock-total-count').innerText = flt.length;
 
         if (stockSortBy === 'name') {
-          flt.sort((a, b) => a.p.name.localeCompare(b.p.name, 'th'));
+          flt.sort((a, b) => naturalCompare(a.p.name, b.p.name));
         } else if (stockSortBy === 'price') {
           flt.sort((a, b) => a.v.price - b.v.price);
         } else if (stockSortBy === 'stock') {
@@ -6476,6 +6817,7 @@
       //    wording first).
       const fieldsToMap = [
         { key: 'name', label: 'ชื่อสินค้าหลัก' },
+        { key: 'code', label: 'รหัสสินค้า (SKU)' },
         { key: 'rowType', label: 'ประเภทแถว (ขนาดหลัก/แบ่งขาย)' },
         { key: 'size', label: 'ขนาดสินค้า' },
         { key: 'category', label: 'หมวดหมู่สินค้า' },
@@ -6500,7 +6842,7 @@
         // จากระบบเองจะจับคู่คอลัมน์ถูกทุกครั้งทันที โดยไม่ต้องจับคู่มือ ส่วนไฟล์จากภายนอกที่หัวคอลัมน์
         // ไม่ตรงเป๊ะจะยังคงใช้การทายคำถัดไป
         const exactHeaders = {
-          name: 'ชื่อสินค้า', rowType: 'ประเภทแถว', size: 'ขนาด', category: 'หมวดหมู่',
+          name: 'ชื่อสินค้า', code: 'รหัสสินค้า', rowType: 'ประเภทแถว', size: 'ขนาด', category: 'หมวดหมู่',
           groupName: 'กลุ่มสินค้า', barcode: 'บาร์โค้ด', cost: 'ทุน', price: 'ราคาขาย', stock: 'สต็อก',
           minStock: 'สต็อกขั้นต่ำ', fractionName: 'ชื่อหน่วยแบ่งขาย', fractionMultiplier: 'อัตราส่วนแบ่งขาย'
         };
@@ -6509,11 +6851,12 @@
 
         const rules = {
           name: ["ชื่อสินค้า", "ชื่อ", "name", "สินค้า", "product", "รายการ"],
+          code: ["รหัสสินค้า", "sku", "product code", "รหัสอ้างอิง"],
           rowType: ["ประเภทแถว", "ประเภท", "rowtype", "row type", "type"],
           size: ["ขนาด", "size", "รุ่น", "variant"],
           category: ["หมวดหมู่", "category", "หมวด", "ประเภทสินค้า", "cat"],
           groupName: ["กลุ่มสินค้า", "กลุ่ม", "group"],
-          barcode: ["บาร์โค้ด", "barcode", "รหัส", "code", "id", "sku"],
+          barcode: ["บาร์โค้ด", "barcode", "รหัส", "code", "id"],
           cost: ["ทุน", "cost", "ซื้อ", "ราคาส่ง"],
           price: ["ราคาขาย", "ขาย", "ราคา", "price", "ปลีก"],
           stock: ["สต็อก", "stock", "จำนวน", "คงเหลือ", "qty", "quantity", "ชิ้น"],
@@ -6650,11 +6993,13 @@
           if (!row || row.length === 0 || row.join('').trim() === "") return;
 
           let name = mapping.name !== null ? (row[mapping.name] || '').toString().trim() : '';
+          let productCode = mapping.code !== null ? (row[mapping.code] || '').toString().trim() : '';
           let sizeName = mapping.size !== null ? (row[mapping.size] || '').toString().trim() : '';
           let category = mapping.category !== null ? (row[mapping.category] || '').toString().trim() : '';
           let groupName = mapping.groupName !== null ? (row[mapping.groupName] || '').toString().trim() : '';
           let rowTypeRaw = mapping.rowType !== null ? (row[mapping.rowType] || '').toString().trim() : '';
           name = window.repairThaiText(name);
+          productCode = window.repairThaiText(productCode);
           sizeName = window.repairThaiText(sizeName) || 'ปกติ';
           category = window.repairThaiText(category);
           groupName = window.repairThaiText(groupName);
@@ -6677,7 +7022,7 @@
             _rowId: 'R' + (rowIdCounter++),
             id: 'P-' + generateID(),
             rowType: isFractionRow ? 'FRACTION' : 'MAIN',
-            name, sizeName, category, groupName, barcode: rawBarcode,
+            name, code: productCode, sizeName, category, groupName, barcode: rawBarcode,
             cost: costP.value, costRaw: costP,
             price: priceP.value, priceRaw: priceP,
             stock: stockP.value, stockRaw: stockP,
@@ -7010,6 +7355,7 @@
                   // อัปเดตกลุ่มสินค้าเฉพาะเมื่อไฟล์ระบุค่ามาจริงๆ (ไม่เขียนทับด้วยค่าว่างถ้าช่องนี้ไม่ได้กรอก
                   // ในไฟล์ที่นำเข้า เพื่อไม่ให้การนำเข้าซ้ำไปลบการจัดกลุ่มที่ตั้งไว้ในระบบโดยไม่ตั้งใจ)
                   if (item.groupName) existingProduct.groupName = item.groupName;
+                  if (item.code) existingProduct.code = item.code;
                   const existingV = existingProduct.variants.find(v => v.sizeName === item.sizeName || (barcode && v.barcode === barcode));
                   if (existingV) {
                     existingV.cost = item.cost;
@@ -7026,7 +7372,7 @@
                   }
                 } else {
                   db.products[item.id] = {
-                    id: item.id, name: item.name, cat: resolvedCategoryNames, groupName: item.groupName || '', image: "📦", isDeleted: false, variants: [
+                    id: item.id, name: item.name, code: item.code || '', cat: resolvedCategoryNames, groupName: item.groupName || '', image: "📦", isDeleted: false, variants: [
                       { id: 'V-' + generateID(), sizeName: item.sizeName, barcode: barcode, cost: item.cost, price: item.price, stock: roundStock(item.stock), minStock: item.minStock, fractions: [] }
                     ]
                   };
@@ -7247,7 +7593,7 @@
         // กลับเข้าไปที่ "นำเข้าสินค้าด่วน" แล้วทุกคอลัมน์จะจับคู่ให้อัตโนมัติ (multi-size และ
         // สินค้าแบ่งขายจะกลับเข้าไปครบถ้วนตามเดิม ไม่ใช่แค่ขนาดหลัก)
         const rows = [[
-          "ชื่อสินค้า", "ประเภทแถว", "ขนาด", "หมวดหมู่", "กลุ่มสินค้า", "บาร์โค้ด",
+          "ชื่อสินค้า", "รหัสสินค้า", "ประเภทแถว", "ขนาด", "หมวดหมู่", "กลุ่มสินค้า", "บาร์โค้ด",
           "ทุน", "ราคาขาย", "สต็อก", "สต็อกขั้นต่ำ",
           "ชื่อหน่วยแบ่งขาย", "อัตราส่วนแบ่งขาย"
         ]];
@@ -7256,13 +7602,13 @@
           const categoryText = Array.isArray(p.cat) ? p.cat.join(', ') : (p.cat || '');
           p.variants.forEach(v => {
             rows.push([
-              p.name, "ขนาดหลัก", v.sizeName, categoryText, p.groupName || '', v.barcode,
+              p.name, p.code || '', "ขนาดหลัก", v.sizeName, categoryText, p.groupName || '', v.barcode,
               v.cost, v.price, v.stock, v.minStock || 10,
               "", ""
             ]);
             (v.fractions || []).forEach(f => {
               rows.push([
-                p.name, "แบ่งขาย", v.sizeName, "", "", "",
+                p.name, "", "แบ่งขาย", v.sizeName, "", "", "",
                 "", f.fractionPrice, "", "",
                 f.fractionName, f.fractionMultiplier
               ]);
@@ -8081,7 +8427,7 @@ const SHEETS = {
     headers: ['รหัสสินค้า', 'ชื่อสินค้า', 'หมวดหมู่', 'ไอคอน', 'รูปภาพ', 'จำนวนขนาดทั้งหมด', 'สถานะ', 'อัปเดตล่าสุด'],
     buildRows(db) {
       return Object.values(db.products).map(p => [
-        p.id, p.name, (p.cat || []).join(', '), p.image || '',
+        p.code || p.id, p.name, (p.cat || []).join(', '), p.image || '',
         // =IMAGE() renders an actual thumbnail directly in the cell when a photo URL
         // is set — Sheets evaluates any cell value starting with "=" as a formula.
         p.imageUrl ? `=IMAGE("${p.imageUrl.replace(/"/g, '""')}")` : '',
@@ -8100,7 +8446,7 @@ const SHEETS = {
       Object.values(db.products).forEach(p => {
         (p.variants || []).forEach(v => {
           rows.push([
-            v.id, p.id, p.name, v.sizeName, v.barcode || '',
+            v.id, p.code || p.id, p.name, v.sizeName, v.barcode || '',
             v.cost, v.price, v.stock, v.minStock,
             (v.fractions || []).length > 0 ? 'มี' : 'ไม่มี'
           ]);
@@ -8118,7 +8464,7 @@ const SHEETS = {
       Object.values(db.products).forEach(p => {
         (p.variants || []).forEach(v => {
           (v.fractions || []).forEach(f => {
-            rows.push([f.id, v.id, p.id, p.name, f.fractionName, f.fractionMultiplier, f.fractionPrice]);
+            rows.push([f.id, v.id, p.code || p.id, p.name, f.fractionName, f.fractionMultiplier, f.fractionPrice]);
           });
         });
       });
@@ -8175,8 +8521,9 @@ const SHEETS = {
       const rows = [];
       (db.bills || []).forEach(b => {
         (b.items || []).forEach(i => {
+          const prod = db.products[i.id];
           rows.push([
-            b.id, i.id || '', i.variantId || '', i.name, i.sizeName || '',
+            b.id, (prod && prod.code) || i.id || '', i.variantId || '', i.name, i.sizeName || '',
             i.qty, i.multiplier || 1, i.price, i.cost,
             roundAmt(i.qty * i.price), i.refundedQty || 0
           ]);
@@ -8215,7 +8562,8 @@ const SHEETS = {
       const rows = [];
       (db.pos || []).forEach(po => {
         (po.items || []).forEach(i => {
-          rows.push([po.id, i.productId, i.variantId, i.qty, i.cost]);
+          const prod = db.products[i.productId];
+          rows.push([po.id, (prod && prod.code) || i.productId, i.variantId, i.qty, i.cost]);
         });
       });
       return rows;
