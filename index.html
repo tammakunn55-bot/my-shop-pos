@@ -1078,12 +1078,6 @@
               </div>
 
               <div class="bg-white p-3 rounded-xl border border-teal-100">
-                <p class="text-[9px] text-slate-500 mb-2">⚙️ เครื่องมือสำรอง/รายงาน (ไม่ใช่ปุ่มซิงค์หลัก — การซิงค์หลักทำอัตโนมัติอยู่แล้วด้านบน) ใช้เมื่อต้องการดูข้อมูลสินค้าดิบใน Supabase Table Editor หรือต่อ Excel/Power BI</p>
-                <button onclick="window.syncProductsToSupabase()" class="w-full py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-xl font-bold text-[10px] btn-touch mb-2">📤 ส่งสินค้าไปที่ Table Editor (รายงาน)</button>
-                <button onclick="window.pullProductsFromSupabase()" class="w-full py-2 bg-slate-400 hover:bg-slate-500 text-white rounded-xl font-bold text-[10px] btn-touch">📥 กู้คืนเฉพาะสินค้าจาก Table Editor (ฉุกเฉิน)</button>
-              </div>
-
-              <div class="bg-white p-3 rounded-xl border border-teal-100">
                 <h4 class="text-xs font-bold text-sky-800 mb-1">🩺 สถานะฐานข้อมูล</h4>
                 <p class="text-[9px] text-slate-500 mb-2">ตรวจสอบความสมบูรณ์ คะแนนสุขภาพ ประวัติการทำรายการ (audit log) และซ่อมแซมอัตโนมัติ</p>
                 <button onclick="window.openDbHealthModal()" class="w-full py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold text-[10px] btn-touch">เปิดแผงควบคุมฐานข้อมูล</button>
@@ -8887,112 +8881,6 @@ window.handleProductImageUpload = async function (event) {
     if (urlInput) urlInput.value = url;
     if (typeof window.previewProductImageUrl === 'function') window.previewProductImageUrl();
     showToast('อัปโหลดรูปสำเร็จ');
-  }
-};
-
-window.pullProductsFromSupabase = async function () {
-  if (typeof window.guardOnce === 'function' && !window.guardOnce('pullProductsFromSupabase')) return;
-
-  window.showCustomConfirm(
-    "ดึงข้อมูลสินค้าจาก Supabase มาใช้ในเครื่องนี้?",
-    "ระบบจะเขียนทับรายการสินค้า/ขนาด/หมวดหมู่ในเครื่องนี้ให้ตรงกับข้อมูลล่าสุดใน Supabase",
-    async () => {
-      showToast("กำลังดึงข้อมูลสินค้าจาก Supabase...");
-      try {
-        const [products, { data: categories, error: cErr }] = await Promise.all([
-          window.fetchProductsFromSupabase(),
-          getSupabaseClient().from('categories').select('*')
-        ]);
-        if (cErr) throw cErr;
-        if (!products) return;
-
-        const productCount = Object.keys(products).length;
-        if (productCount === 0) {
-          return showAlert("ไม่มีข้อมูล", "ยังไม่มีสินค้าอยู่ใน Supabase เลย", true);
-        }
-
-        db.products = products;
-        (categories || []).forEach(c => {
-          if (!db.categories.some(existing => existing.id === c.id)) {
-            db.categories.push({ id: c.id, name: c.name, icon: c.icon || '📦', color: c.color || '#6366f1' });
-          }
-        });
-
-        persist();
-        renderAll();
-        if (typeof window.renderStock === 'function') window.renderStock();
-        if (typeof window.logTransaction === 'function') {
-          window.logTransaction('SUPABASE_PULL', { productCount });
-        }
-        showAlert("ดึงข้อมูลสำเร็จ", `นำสินค้า ${productCount} รายการจาก Supabase มาใช้ในเครื่องนี้เรียบร้อยแล้ว`, false);
-      } catch (err) {
-        console.error("Supabase pull error:", err);
-        showAlert("ดึงข้อมูลไม่สำเร็จ", "เกิดข้อผิดพลาด: " + err.message, true);
-      }
-    }
-  );
-};
-
-window.fetchProductsFromSupabase = async function () {
-  try {
-    const [{ data: products, error: pErr }, { data: variants, error: vErr }, { data: fractions, error: fErr }, { data: catLinks, error: clErr }, { data: categories, error: cErr }] = await Promise.all([
-      getSupabaseClient().from('products').select('*'),
-      getSupabaseClient().from('product_variants').select('*'),
-      getSupabaseClient().from('product_fractions').select('*'),
-      getSupabaseClient().from('product_categories').select('*'),
-      getSupabaseClient().from('categories').select('*')
-    ]);
-    if (pErr) throw pErr;
-    if (vErr) throw vErr;
-    if (fErr) throw fErr;
-    // We tolerate missing link tables gracefully assuming the structure may evolve
-    
-    const catIdToName = {};
-    if (categories) {
-        categories.forEach(c => { catIdToName[c.id] = c.name; });
-    }
-
-    const result = {};
-    products.forEach(p => {
-      result[p.id] = {
-        id: p.id, name: p.name, cat: [], image: p.icon || '', imageUrl: p.image_url || '',
-        isDeleted: p.is_deleted, variants: []
-      };
-    });
-    
-    if (catLinks) {
-        catLinks.forEach(link => {
-          if (result[link.product_id] && catIdToName[link.category_id]) {
-            result[link.product_id].cat.push(catIdToName[link.category_id]);
-          }
-        });
-    }
-    
-    variants.forEach(v => {
-      if (!result[v.product_id]) return;
-      result[v.product_id].variants.push({
-        id: v.id, sizeName: v.size_name, barcode: v.barcode || '',
-        cost: roundAmt(parseFloat(v.cost)), price: roundAmt(parseFloat(v.price)),
-        stock: roundStock(parseFloat(v.stock)), minStock: roundStock(parseFloat(v.min_stock)), fractions: []
-      });
-    });
-    
-    if (fractions) {
-        fractions.forEach(f => {
-          for (const pid in result) {
-            const v = result[pid].variants.find(x => x.id === f.variant_id);
-            if (v) {
-              v.fractions.push({ id: f.id, fractionName: f.fraction_name, fractionMultiplier: roundStock(parseFloat(f.multiplier)), fractionPrice: roundAmt(parseFloat(f.fraction_price)) });
-              break;
-            }
-          }
-        });
-    }
-    return result;
-  } catch (err) {
-    console.error("Supabase fetch error:", err);
-    showAlert("ดึงข้อมูลไม่สำเร็จ", "เกิดข้อผิดพลาด: " + err.message, true);
-    return null;
   }
 };
 
