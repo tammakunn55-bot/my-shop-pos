@@ -261,6 +261,10 @@
           <input type="text" id="search-product" oninput="window.onSearchInput(event)" placeholder="สแกนบาร์โค้ด หรือพิมพ์ค้นหา..." class="w-full bg-white border-2 border-slate-200 rounded-2xl py-4 pl-12 pr-4 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold text-sm text-slate-800">
           <span class="absolute left-4 top-4 text-xl opacity-30">🔍</span>
         </div>
+        <div id="bestseller-row-wrap" class="mb-4 hidden">
+          <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">🔥 ขายดี 7 วันล่าสุด — แตะเพื่อหยิบใส่ตะกร้าเร็วๆ</h4>
+          <div id="bestseller-row" class="flex gap-2 overflow-x-auto no-scrollbar pb-1"></div>
+        </div>
         <div id="category-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6"></div>
         <div id="product-selection" class="hidden">
           <div class="flex items-center justify-between mb-4">
@@ -347,6 +351,11 @@
               <select id="stock-sort-select" onchange="window.stockSortBy = this.value; window.renderStock()" class="bg-white border border-slate-300 text-xs rounded-xl px-2 py-1.5 outline-none font-bold text-slate-700">
                 <option value="id">อัปเดต</option>
                 <option value="name">ชื่อ</option>
+                <option value="code">รหัสสินค้า</option>
+                <option value="barcode">บาร์โค้ด</option>
+                <option value="size">ขนาด</option>
+                <option value="cat">หมวดหมู่</option>
+                <option value="cost">ทุน</option>
                 <option value="price">ราคา</option>
                 <option value="stock">เหลือน้อย</option>
               </select>
@@ -365,7 +374,7 @@
 
           <div class="overflow-x-auto">
             <table class="w-full text-left whitespace-nowrap min-w-[500px]">
-              <thead class="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b" id="stock-table-head"></thead>
+              <thead class="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b sticky top-20 z-20 shadow-sm" id="stock-table-head"></thead>
               <tbody id="stock-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
             </table>
           </div>
@@ -2944,17 +2953,71 @@
       // ==========================================
       // SALE HOME & CATEGORIES GRID
       // ==========================================
+      window.renderBestsellerRow = function() {
+        const wrap = document.getElementById('bestseller-row-wrap');
+        const row = document.getElementById('bestseller-row');
+        if (!wrap || !row) return;
+
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const tally = {}; // productId -> { qty, product }
+        (db.bills || []).forEach(b => {
+          if (b.time < cutoff) return;
+          (b.items || []).forEach(i => {
+            const p = db.products[i.id];
+            if (!p || p.isDeleted) return;
+            if (!tally[i.id]) tally[i.id] = { qty: 0, product: p };
+            tally[i.id].qty += i.qty || 0;
+          });
+        });
+
+        const top = Object.values(tally).sort((a, b) => b.qty - a.qty).slice(0, 10);
+        if (top.length === 0) { wrap.classList.add('hidden'); return; }
+        wrap.classList.remove('hidden');
+
+        row.innerHTML = top.map(({ qty, product: p }) => {
+          const clickAttr = (p.groupName || '').trim()
+            ? `window.onGroupClick('${escapeHTML(p.groupName)}')`
+            : `window.onProductClick('${escapeHTML(p.id)}')`;
+          const thumb = p.imageUrl
+            ? `<img src="${escapeHTML(p.imageUrl)}" class="w-full h-14 object-cover rounded-lg mb-1">`
+            : `<div class="w-full h-14 bg-slate-100 rounded-lg mb-1 flex items-center justify-center text-xl">${escapeHTML(p.image || '📦')}</div>`;
+          return `
+            <div onclick="${clickAttr}" class="flex-none w-20 bg-white border rounded-xl p-1.5 shadow-sm cursor-pointer active:scale-95 transition">
+              ${thumb}
+              <p class="text-[9px] font-bold text-slate-700 leading-tight line-clamp-2 h-6">${escapeHTML(p.name)}</p>
+              <p class="text-[8px] text-rose-500 font-black">ขาย ${qty}</p>
+            </div>
+          `;
+        }).join('');
+      };
+
       function renderSaleHome() {
+        window.renderBestsellerRow();
         const grid = document.getElementById('category-grid');
         if (grid) {
-          grid.innerHTML = db.categories.map(c => `
-            <div onclick="window.selectCategory('${escapeHTML(c.name)}')" class="p-card bg-white p-5 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer">
-              <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-3 shadow-inner" style="background-color: ${escapeHTML(c.color)}15; color: ${escapeHTML(c.color)};">
-                ${escapeHTML(c.icon || '📁')}
+          grid.innerHTML = db.categories.map(c => {
+            // หารูปสินค้าตัวแรกในหมวดนี้ที่มีรูปจริงมาใช้เป็นภาพตัวแทนของการ์ดหมวดหมู่ ให้จำหมวดได้
+            // ง่ายกว่าไอคอนเฉยๆ — ถ้ายังไม่มีสินค้าตัวไหนในหมวดนี้มีรูปเลย ใช้ไอคอนแบบเดิมแทน
+            const repProduct = Object.values(db.products).find(p => !p.isDeleted && p.cat && p.cat.includes(c.name) && p.imageUrl);
+            if (repProduct) {
+              return `
+                <div onclick="window.selectCategory('${escapeHTML(c.name)}')" class="p-card relative overflow-hidden h-32 shadow-sm cursor-pointer">
+                  <img src="${escapeHTML(repProduct.imageUrl)}" class="absolute inset-0 w-full h-full object-cover block">
+                  <div class="absolute inset-x-0 bottom-0 px-2 pt-6 pb-1.5" style="background:linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0));">
+                    <h4 class="font-extrabold text-[11px] text-white truncate w-full">${escapeHTML(c.name)}</h4>
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <div onclick="window.selectCategory('${escapeHTML(c.name)}')" class="p-card bg-white p-5 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer">
+                <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-3 shadow-inner" style="background-color: ${escapeHTML(c.color)}15; color: ${escapeHTML(c.color)};">
+                  ${escapeHTML(c.icon || '📁')}
+                </div>
+                <h4 class="font-extrabold text-xs text-slate-700 truncate w-full">${escapeHTML(c.name)}</h4>
               </div>
-              <h4 class="font-extrabold text-xs text-slate-700 truncate w-full">${escapeHTML(c.name)}</h4>
-            </div>
-          `).join('');
+            `;
+          }).join('');
         }
 
         if (activeCategory) {
@@ -4380,7 +4443,7 @@
 
       window.stockSelectedProductIds = new Set();
       window.stockSortDir = 'asc';
-      const SORTABLE_STOCK_COLS = { name: 'ชื่อ', price: 'ราคาขาย', stock: 'จำนวน', cat: 'หมวดหมู่' };
+      const SORTABLE_STOCK_COLS = { name: 'ชื่อ', price: 'ราคาขาย', stock: 'จำนวน', cat: 'หมวดหมู่', code: 'รหัสสินค้า', barcode: 'บาร์โค้ด', size: 'ขนาด', cost: 'ทุน' };
 
       window.toggleStockSortColumn = function(colKey) {
         if (!SORTABLE_STOCK_COLS[colKey]) return;
@@ -4501,7 +4564,8 @@
         panel.classList.toggle('hidden');
         if (!panel.classList.contains('hidden')) {
           const list = document.getElementById('column-panel-list');
-          list.innerHTML = STOCK_COLUMNS.map(c => `
+          const NON_HIDEABLE_COLS = new Set(['sel', 'addVar', 'addFrac', 'actions']);
+          list.innerHTML = STOCK_COLUMNS.filter(c => !NON_HIDEABLE_COLS.has(c.key)).map(c => `
             <label class="flex items-center gap-1.5 bg-slate-50 border rounded-xl px-2 py-1.5 cursor-pointer font-bold text-slate-700">
               <input type="checkbox" class="w-3.5 h-3.5" ${columnVisibility[c.key] ? 'checked' : ''} onchange="window.toggleColumn('${c.key}', this.checked)">
               <span>${c.label}</span>
@@ -4841,7 +4905,7 @@
             const isMatchLowStock = !onlyLowStock || isBelowMin;
             // ชื่อ "น่าสงสัย" = สั้นเกินไป หรือเป็นแค่เบอร์/ขนาดล้วนๆ (เช่น "#0", "1/2\"", "80")
             // แบบที่ระบบนำเข้าเว็บบางหน้าดึงมาผิด (เอาแค่ตัวเลือกย่อยมาเป็นชื่อสินค้าทั้งหมด)
-            const looksLikeBareSizeToken = /^#?\d+(\.\d+)?(\/\d+)?\s*(["'”]|นิ้ว|มม\.?|ซม\.?|mm|cm)?$/i.test(p.name.trim());
+            const looksLikeBareSizeToken = /^#?\d+(-\d+)?(\.\d+)?(\/\d+)?\s*(["'”]|นิ้ว|มม\.?|ซม\.?|หุน|mm|cm)?$/i.test(p.name.trim());
             const isSuspiciousName = p.name.trim().length < 4 || looksLikeBareSizeToken;
             const isMatchSuspicious = !onlySuspiciousName || isSuspiciousName;
 
@@ -4870,10 +4934,18 @@
           });
         } else if (stockSortBy === 'price') {
           flt.sort((a, b) => a.v.price - b.v.price);
+        } else if (stockSortBy === 'cost') {
+          flt.sort((a, b) => a.v.cost - b.v.cost);
         } else if (stockSortBy === 'stock') {
           flt.sort((a, b) => a.v.stock - b.v.stock);
         } else if (stockSortBy === 'cat') {
           flt.sort((a, b) => ((a.p.cat && a.p.cat[0]) || '').localeCompare((b.p.cat && b.p.cat[0]) || '', 'th'));
+        } else if (stockSortBy === 'code') {
+          flt.sort((a, b) => naturalCompare(a.p.code || a.p.id, b.p.code || b.p.id));
+        } else if (stockSortBy === 'barcode') {
+          flt.sort((a, b) => naturalCompare(a.v.barcode || '', b.v.barcode || ''));
+        } else if (stockSortBy === 'size') {
+          flt.sort((a, b) => naturalCompare(a.v.sizeName || '', b.v.sizeName || ''));
         } else {
           flt.sort((a, b) => b.p.id.localeCompare(a.p.id));
         }
