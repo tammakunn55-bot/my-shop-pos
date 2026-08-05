@@ -337,6 +337,11 @@
                 <span>⚠️ ต่ำกว่าเกณฑ์</span>
               </label>
 
+              <label class="flex items-center space-x-1 text-xs font-bold text-amber-600 cursor-pointer bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-100 flex-none">
+                <input type="checkbox" id="stock-suspicious-name-filter" onchange="window.renderStock()" class="w-4 h-4 text-amber-600 rounded">
+                <span>🔎 ชื่อน่าสงสัย</span>
+              </label>
+
               <select id="stock-category-filter" onchange="window.renderStock()" class="bg-white border border-slate-300 text-xs rounded-xl px-2 py-1.5 outline-none font-bold text-slate-700 max-w-[100px]"></select>
               
               <select id="stock-sort-select" onchange="window.stockSortBy = this.value; window.renderStock()" class="bg-white border border-slate-300 text-xs rounded-xl px-2 py-1.5 outline-none font-bold text-slate-700">
@@ -4779,6 +4784,7 @@
         const search = document.getElementById('stock-search-input').value.toLowerCase();
         const catFilter = document.getElementById('stock-category-filter').value;
         const onlyLowStock = document.getElementById('stock-low-filter').checked;
+        const onlySuspiciousName = document.getElementById('stock-suspicious-name-filter').checked;
         const tbody = document.getElementById('stock-table-body');
         const head = document.getElementById('stock-table-head');
 
@@ -4833,13 +4839,18 @@
             const limit = v.minStock !== undefined ? v.minStock : 10;
             const isBelowMin = roundStock(v.stock) <= roundStock(limit);
             const isMatchLowStock = !onlyLowStock || isBelowMin;
+            // ชื่อ "น่าสงสัย" = สั้นเกินไป หรือเป็นแค่เบอร์/ขนาดล้วนๆ (เช่น "#0", "1/2\"", "80")
+            // แบบที่ระบบนำเข้าเว็บบางหน้าดึงมาผิด (เอาแค่ตัวเลือกย่อยมาเป็นชื่อสินค้าทั้งหมด)
+            const looksLikeBareSizeToken = /^#?\d+(\.\d+)?(\/\d+)?\s*(["'”]|นิ้ว|มม\.?|ซม\.?|mm|cm)?$/i.test(p.name.trim());
+            const isSuspiciousName = p.name.trim().length < 4 || looksLikeBareSizeToken;
+            const isMatchSuspicious = !onlySuspiciousName || isSuspiciousName;
 
             const isMatchCode = !stockFilters.code || ((p.code || p.id).toLowerCase().includes(stockFilters.code.toLowerCase()));
             const isMatchBarcode = !stockFilters.barcode || (v.barcode || '').toLowerCase().includes(stockFilters.barcode.toLowerCase());
             const isMatchName = !stockFilters.name || p.name.toLowerCase().includes(stockFilters.name.toLowerCase());
             const isMatchSize = !stockFilters.size || (v.sizeName || '').toLowerCase().includes(stockFilters.size.toLowerCase());
 
-            if (isMatchSearch && isMatchCat && isMatchLowStock && isMatchCode && isMatchBarcode && isMatchName && isMatchSize) {
+            if (isMatchSearch && isMatchCat && isMatchLowStock && isMatchSuspicious && isMatchCode && isMatchBarcode && isMatchName && isMatchSize) {
               flt.push({ p, v, isBelowMin, limit, isFirstVariant: idx === 0 });
             }
           });
