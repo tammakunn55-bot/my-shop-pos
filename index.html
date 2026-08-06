@@ -287,7 +287,7 @@
       <!-- VIEW: STOCK -->
       <section id="view-stock" class="view-content hidden fade-in">
         <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-4 text-center text-slate-800">
-          <button onclick="window.addNewProductRow()" class="bg-indigo-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
+          <button onclick="window.openProductModal()" class="bg-indigo-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">➕</span>เพิ่มสินค้าใหม่</button>
           <button onclick="window.toggleColumnPanel()" class="bg-purple-600 text-white p-1.5 rounded-xl font-bold text-[9px] shadow-sm btn-touch leading-tight flex flex-col items-center justify-center">
             <span class="text-sm">🧩</span>คอลัมน์</button>
@@ -1253,6 +1253,12 @@
           <div>
             <label class="text-xs font-bold text-slate-500 mb-1 block">ชื่อหมวดหมู่</label>
             <input type="text" id="cat-name" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" placeholder="ชื่อหมวดหมู่ เช่น อุปกรณ์ไฟฟ้า">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-500 mb-1 block">อยู่ภายใต้หมวดหมู่หลัก (ถ้ามี)</label>
+            <select id="cat-parent-id" class="w-full bg-white border rounded-xl py-3 px-4 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800">
+              <option value="">-- ไม่มี (เป็นหมวดหมู่หลัก) --</option>
+            </select>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
@@ -2995,10 +3001,11 @@
         window.renderBestsellerRow();
         const grid = document.getElementById('category-grid');
         if (grid) {
-          grid.innerHTML = db.categories.map(c => {
-            // หารูปสินค้าตัวแรกในหมวดนี้ที่มีรูปจริงมาใช้เป็นภาพตัวแทนของการ์ดหมวดหมู่ ให้จำหมวดได้
-            // ง่ายกว่าไอคอนเฉยๆ — ถ้ายังไม่มีสินค้าตัวไหนในหมวดนี้มีรูปเลย ใช้ไอคอนแบบเดิมแทน
-            const repProduct = Object.values(db.products).find(p => !p.isDeleted && p.cat && p.cat.includes(c.name) && p.imageUrl);
+          grid.innerHTML = db.categories.filter(c => !c.parentId).map(c => {
+            // หารูปสินค้าตัวแรกในหมวดนี้ (รวมหมวดย่อยของมันด้วย) ที่มีรูปจริงมาใช้เป็นภาพตัวแทนของ
+            // การ์ดหมวดหมู่ ให้จำหมวดได้ง่ายกว่าไอคอนเฉยๆ — ถ้ายังไม่มีสินค้าตัวไหนมีรูปเลย ใช้ไอคอนแทน
+            const namesInThisCat = [c.name, ...db.categories.filter(sub => sub.parentId === c.id).map(sub => sub.name)];
+            const repProduct = Object.values(db.products).find(p => !p.isDeleted && p.cat && p.cat.some(cn => namesInThisCat.includes(cn)) && p.imageUrl);
             if (repProduct) {
               return `
                 <div onclick="window.selectCategory('${escapeHTML(c.name)}')" class="p-card relative overflow-hidden h-32 shadow-sm cursor-pointer">
@@ -3029,7 +3036,7 @@
         }
       }
 
-      window.selectCategory = function(catName) {
+      window.selectCategory = function(catName, showAllInMain = false) {
         activeCategory = catName;
         const grid = document.getElementById('category-grid');
         const catTitle = document.getElementById('current-cat-title');
@@ -3038,8 +3045,34 @@
         if (catTitle) catTitle.innerText = catName;
         if (ps) ps.classList.remove('hidden');
 
-        const filteredProducts = Object.values(db.products).filter(p => !p.isDeleted && p.cat && p.cat.includes(catName)).sort((a, b) => naturalCompare(a.name, b.name));
+        const cat = db.categories.find(c => c.name === catName);
+        const subCats = cat ? db.categories.filter(c => c.parentId === cat.id) : [];
+
+        if (subCats.length > 0 && !showAllInMain) {
+          window.renderSubcategoryPicker(cat, subCats);
+          return;
+        }
+
+        // ดูทั้งหมดในหมวดหลัก = รวมสินค้าที่แท็กด้วยชื่อหมวดหลักเอง หรือหมวดย่อยตัวใดตัวหนึ่งของมัน
+        const namesToMatch = showAllInMain ? [catName, ...subCats.map(s => s.name)] : [catName];
+        const filteredProducts = Object.values(db.products).filter(p => !p.isDeleted && p.cat && p.cat.some(c => namesToMatch.includes(c))).sort((a, b) => naturalCompare(a.name, b.name));
         renderProductGrid(filteredProducts);
+      };
+
+      window.renderSubcategoryPicker = function(cat, subCats) {
+        const container = document.getElementById('product-grid');
+        if (!container) return;
+        const tileHtml = (name, icon, color, onclick) => `
+          <div onclick="${onclick}" class="p-card bg-white p-5 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-3 shadow-inner" style="background-color: ${escapeHTML(color)}15; color: ${escapeHTML(color)};">
+              ${escapeHTML(icon)}
+            </div>
+            <h4 class="font-extrabold text-xs text-slate-700 truncate w-full">${escapeHTML(name)}</h4>
+          </div>
+        `;
+        container.innerHTML =
+          tileHtml('ทั้งหมดในหมวดนี้', '📦', '#6366f1', `window.selectCategory('${escapeHTML(cat.name)}', true)`) +
+          subCats.map(s => tileHtml(s.name, s.icon || '📁', s.color || '#6366f1', `window.selectCategory('${escapeHTML(s.name)}')`)).join('');
       };
 
       window.exitCategory = function() {
@@ -4590,22 +4623,6 @@
         window.renderStock();
       };
 
-      window.addNewProductRow = function() {
-        window.openManagerPinModal(() => {
-          const id = 'P-' + generateID();
-          const vId = 'V-' + generateID();
-          db.products[id] = {
-            id, name: 'สินค้าใหม่ (แตะเพื่อแก้ไขชื่อ)', code: id, image: '📦',
-            cat: db.categories.length ? [db.categories[0].name] : [],
-            isDeleted: false,
-            variants: [{ id: vId, sizeName: 'ปกติ', barcode: 'AUTO-' + db.counters.barcode++, cost: 0, price: 0, stock: 0, minStock: 10, unit: 'ชิ้น', fractions: [] }]
-          };
-          persist();
-          window.renderStock();
-          showToast("เพิ่มสินค้าใหม่แล้ว กรอกข้อมูลในตารางได้เลย");
-        });
-      };
-
       window.addInlineVariant = function(productId) {
         const p = db.products[productId];
         if (!p) return;
@@ -4853,8 +4870,16 @@
         const head = document.getElementById('stock-table-head');
 
         let catOptions = `<option value="ALL">ทั้งหมด</option>`;
-        db.categories.forEach(c => {
-          catOptions += `<option value="${escapeHTML(c.name)}" ${catFilter === c.name ? 'selected' : ''}>${escapeHTML(c.name)}</option>`;
+        db.categories.filter(c => !c.parentId).forEach(c => {
+          const subs = db.categories.filter(s => s.parentId === c.id);
+          if (subs.length > 0) {
+            catOptions += `<optgroup label="${escapeHTML(c.name)}">` +
+              `<option value="${escapeHTML(c.name)}" ${catFilter === c.name ? 'selected' : ''}>${escapeHTML(c.name)} (ทั้งหมด)</option>` +
+              subs.map(s => `<option value="${escapeHTML(s.name)}" ${catFilter === s.name ? 'selected' : ''}>${escapeHTML(s.name)}</option>`).join('') +
+              `</optgroup>`;
+          } else {
+            catOptions += `<option value="${escapeHTML(c.name)}" ${catFilter === c.name ? 'selected' : ''}>${escapeHTML(c.name)}</option>`;
+          }
         });
         document.getElementById('stock-category-filter').innerHTML = catOptions;
 
@@ -4899,7 +4924,11 @@
           if (p.isDeleted) return;
           p.variants.forEach((v, idx) => {
             const isMatchSearch = p.name.toLowerCase().includes(search) || (v.barcode || '').toLowerCase().includes(search);
-            const isMatchCat = catFilter === 'ALL' || (p.cat && p.cat.includes(catFilter));
+            const catFilterCat = db.categories.find(x => x.name === catFilter);
+            const catFilterNames = catFilterCat && !catFilterCat.parentId
+              ? [catFilter, ...db.categories.filter(s => s.parentId === catFilterCat.id).map(s => s.name)]
+              : [catFilter];
+            const isMatchCat = catFilter === 'ALL' || (p.cat && p.cat.some(cn => catFilterNames.includes(cn)));
             const limit = v.minStock !== undefined ? v.minStock : 10;
             const isBelowMin = roundStock(v.stock) <= roundStock(limit);
             const isMatchLowStock = !onlyLowStock || isBelowMin;
@@ -4966,7 +4995,20 @@
           return;
         }
 
-        let catOptionsForRow = (selected) => db.categories.map(c => `<option value="${escapeHTML(c.name)}" ${selected === c.name ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('') + `<option value="__NEW__">+ เพิ่มหมวดหมู่ใหม่...</option>`;
+        let catOptionsForRow = (selected) => {
+          const topLevel = db.categories.filter(c => !c.parentId);
+          const opt = c => `<option value="${escapeHTML(c.name)}" ${selected === c.name ? 'selected' : ''}>${escapeHTML(c.name)}</option>`;
+          let html = '';
+          topLevel.forEach(c => {
+            const subs = db.categories.filter(s => s.parentId === c.id);
+            if (subs.length > 0) {
+              html += `<optgroup label="${escapeHTML(c.name)}">` + opt(c) + subs.map(opt).join('') + `</optgroup>`;
+            } else {
+              html += opt(c);
+            }
+          });
+          return html + `<option value="__NEW__">+ เพิ่มหมวดหมู่ใหม่...</option>`;
+        };
 
         let rowsHtml = paginatedFlt.map(item => {
           const p = item.p, v = item.v, isBelowMin = item.isBelowMin, limit = item.limit;
@@ -5117,17 +5159,38 @@
         });
       };
 
+      window.populateCategoryParentSelect = function(excludeId) {
+        const sel = document.getElementById('cat-parent-id');
+        const topLevel = db.categories.filter(c => !c.parentId && c.id !== excludeId);
+        sel.innerHTML = `<option value="">-- ไม่มี (เป็นหมวดหมู่หลัก) --</option>` +
+          topLevel.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.icon || '📁')} ${escapeHTML(c.name)}</option>`).join('');
+      };
+
       function renderCatListUI() {
         const list = document.getElementById('cat-list-ui');
-        list.innerHTML = db.categories.map(c => `
-          <div class="flex justify-between items-center p-2 bg-slate-50 border rounded-xl text-slate-800">
-            <span class="text-xs font-bold"><span style="color:${escapeHTML(c.color)}">${escapeHTML(c.icon)}</span> ${escapeHTML(c.name)}</span>
+        window.populateCategoryParentSelect(document.getElementById('edit-cat-id').value);
+
+        const topLevel = db.categories.filter(c => !c.parentId);
+        const orphanSubs = db.categories.filter(c => c.parentId && !db.categories.some(p => p.id === c.parentId));
+
+        const rowHtml = (c, isSub) => `
+          <div class="flex justify-between items-center p-2 bg-slate-50 border rounded-xl text-slate-800 ${isSub ? 'ml-5' : ''}">
+            <span class="text-xs font-bold">${isSub ? '↳ ' : ''}<span style="color:${escapeHTML(c.color)}">${escapeHTML(c.icon)}</span> ${escapeHTML(c.name)}</span>
             <div class="flex gap-2">
               <button onclick="window.editCategory('${escapeHTML(c.id)}')" class="text-indigo-500 font-bold text-xs">✏️</button>
               <button onclick="window.deleteCategory('${escapeHTML(c.id)}')" class="text-rose-500 font-bold text-xs">🗑️</button>
             </div>
           </div>
-        `).join('');
+        `;
+
+        let html = '';
+        topLevel.forEach(c => {
+          html += rowHtml(c, false);
+          db.categories.filter(sub => sub.parentId === c.id).forEach(sub => { html += rowHtml(sub, true); });
+        });
+        orphanSubs.forEach(c => { html += rowHtml(c, false); }); // กันกรณีหมวดแม่ถูกลบไปแล้วแต่ลูกยังอยู่
+
+        list.innerHTML = html;
       }
 
       window.editCategory = function(id) {
@@ -5137,6 +5200,8 @@
         document.getElementById('cat-name').value = c.name;
         document.getElementById('cat-icon').value = c.icon;
         document.getElementById('cat-color').value = c.color;
+        window.populateCategoryParentSelect(c.id);
+        document.getElementById('cat-parent-id').value = c.parentId || '';
         document.getElementById('btn-cancel-edit-cat').classList.remove('hidden');
       };
 
@@ -5144,6 +5209,8 @@
         document.getElementById('edit-cat-id').value = "";
         document.getElementById('cat-name').value = "";
         document.getElementById('cat-icon').value = "";
+        window.populateCategoryParentSelect(null);
+        document.getElementById('cat-parent-id').value = "";
         document.getElementById('btn-cancel-edit-cat').classList.add('hidden');
       };
 
@@ -5153,14 +5220,16 @@
         const name = document.getElementById('cat-name').value.trim();
         const icon = document.getElementById('cat-icon').value.trim();
         const color = document.getElementById('cat-color').value;
+        const parentId = document.getElementById('cat-parent-id').value || null;
         if(!name) return showAlert("ข้อมูลไม่ครบ", "กรุณาระบุชื่อหมวดหมู่", true);
+        if (parentId === id) return showAlert("ตั้งค่าไม่ถูกต้อง", "หมวดหมู่ไม่สามารถเป็นหมวดหมู่ย่อยของตัวเองได้", true);
 
         const oldCat = db.categories.find(x => x.id === id);
         const oldName = oldCat ? oldCat.name : null;
 
         const existingIdx = db.categories.findIndex(x => x.id === id);
-        if(existingIdx >= 0) db.categories[existingIdx] = {id, name, icon, color};
-        else db.categories.push({id, name, icon, color});
+        if(existingIdx >= 0) db.categories[existingIdx] = {id, name, icon, color, parentId};
+        else db.categories.push({id, name, icon, color, parentId});
         
         if (oldName && oldName !== name) {
           Object.values(db.products).forEach(p => {
