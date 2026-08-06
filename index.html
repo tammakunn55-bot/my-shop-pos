@@ -1019,6 +1019,48 @@
             </div>
           </details>
 
+          <!-- ================= 1.5 AUTO-GENERATED CODE FORMAT SETTINGS ================= -->
+          <details class="bg-cyan-50 rounded-2xl border border-cyan-200 overflow-hidden">
+            <summary onclick="setTimeout(window.loadCodeConfigIntoForm, 0)" class="p-4 font-bold text-cyan-800 cursor-pointer text-xs flex items-center gap-1">🔢 ตั้งค่ารูปแบบรหัสอัตโนมัติ</summary>
+            <div class="p-4 pt-0 space-y-3">
+              <p class="text-[10px] text-slate-500 leading-relaxed">กำหนดรูปแบบรหัสที่ระบบสร้างให้อัตโนมัติสำหรับ ลูกค้า/ซัพพลายเออร์/หมวดหมู่ใหม่ — ตั้งครั้งเดียวก่อนเริ่มใช้งานจริง (แก้ทีหลังได้ แต่รหัสเก่าที่สร้างไปแล้วจะไม่เปลี่ยนตาม)</p>
+              <div class="grid grid-cols-3 gap-2 text-[10px] font-bold text-slate-400 px-1">
+                <span>ประเภท</span><span>คำนำหน้า</span><span>เลขถัดไป (หลัก)</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2 items-center">
+                <span class="text-xs font-bold text-slate-700">👤 ลูกค้า</span>
+                <input type="text" id="codecfg-customer-prefix" class="border rounded-xl py-2 px-2 text-xs font-bold outline-none text-slate-800">
+                <div class="flex gap-1">
+                  <input type="number" id="codecfg-customer-next" min="1" class="w-full border rounded-xl py-2 px-2 text-xs font-bold outline-none text-slate-800">
+                  <input type="number" id="codecfg-customer-digits" min="1" max="8" class="w-12 border rounded-xl py-2 px-1 text-xs font-bold outline-none text-slate-800" title="จำนวนหลัก">
+                </div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 items-center">
+                <span class="text-xs font-bold text-slate-700">🚚 ซัพพลายเออร์</span>
+                <input type="text" id="codecfg-supplier-prefix" class="border rounded-xl py-2 px-2 text-xs font-bold outline-none text-slate-800">
+                <div class="flex gap-1">
+                  <input type="number" id="codecfg-supplier-next" min="1" class="w-full border rounded-xl py-2 px-2 text-xs font-bold outline-none text-slate-800">
+                  <input type="number" id="codecfg-supplier-digits" min="1" max="8" class="w-12 border rounded-xl py-2 px-1 text-xs font-bold outline-none text-slate-800" title="จำนวนหลัก">
+                </div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 items-center">
+                <span class="text-xs font-bold text-slate-700">📁 หมวดหมู่</span>
+                <input type="text" id="codecfg-category-prefix" class="border rounded-xl py-2 px-2 text-xs font-bold outline-none text-slate-800">
+                <div class="flex gap-1">
+                  <input type="number" id="codecfg-category-next" min="1" class="w-full border rounded-xl py-2 px-2 text-xs font-bold outline-none text-slate-800">
+                  <input type="number" id="codecfg-category-digits" min="1" max="8" class="w-12 border rounded-xl py-2 px-1 text-xs font-bold outline-none text-slate-800" title="จำนวนหลัก">
+                </div>
+              </div>
+              <div class="bg-white border rounded-xl p-3 text-[10px] text-slate-500">
+                <b>ตัวอย่างผลลัพธ์:</b> <span id="codecfg-preview" class="font-bold text-cyan-700"></span>
+              </div>
+              <div class="bg-slate-50 border rounded-xl p-3 text-[10px] text-slate-500 leading-relaxed">
+                📌 <b>รหัสสินค้า</b> ตั้งได้ที่หน้าคลัง ปุ่ม "🔢 รันรหัสสินค้า" (ยืดหยุ่นกว่า เพราะมักต้องรันใหม่เป็นชุดตามสต็อกจริง) &nbsp;•&nbsp; <b>รหัสบิล/ใบเสร็จ</b> ระบบตั้งให้อัตโนมัติแบบ <code>POS-วันที่-เลขที่</code> อยู่แล้ว เรียงตามวันที่จริงเสมอ ไม่ต้องตั้งค่าเพิ่ม
+              </div>
+              <button onclick="window.saveCodeConfig()" class="w-full py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-2xl font-bold shadow-md btn-touch text-sm">บันทึกรูปแบบรหัส</button>
+            </div>
+          </details>
+
           <!-- ================= 2. USERS & SECURITY (everyone-related settings, one place) ================= -->
           <details class="bg-violet-50 rounded-2xl border border-violet-200 overflow-hidden">
             <summary class="p-4 font-bold text-violet-800 cursor-pointer text-xs flex items-center gap-1">👥 ผู้ใช้งานและความปลอดภัย</summary>
@@ -2365,7 +2407,12 @@
         },
         bills: [], shifts: [], pos: [], currentShift: null,
         cashLedger: [],
-        counters: { product: 3, customer: 3, category: 4, po: 1, barcode: 1000004, variant: 4, dailyBillNum: 0, lastBillDate: "" },
+        counters: { product: 3, customer: 3, category: 4, po: 1, supplier: 1, barcode: 1000004, variant: 4, dailyBillNum: 0, lastBillDate: "" },
+        codeConfig: {
+          customer: { prefix: 'CUS-', digits: 4 },
+          supplier: { prefix: 'SUP-', digits: 3 },
+          category: { prefix: 'CAT-', digits: 2 }
+        },
         pendingSyncs: [],
         users: [] // {id, name, pinHash, pinSalt, role: 'owner'|'staff', createdAt} — see suppliers.js-style user management
       };
@@ -2463,6 +2510,8 @@
           if (!db.users) db.users = [];
           if (!db.documents) db.documents = [];
           if (!db.purchaseDrafts) db.purchaseDrafts = [];
+          if (db.counters && db.counters.supplier === undefined) db.counters.supplier = Object.keys(db.suppliers || {}).length + 1;
+          if (!db.codeConfig) db.codeConfig = { customer: { prefix: 'CUS-', digits: 4 }, supplier: { prefix: 'SUP-', digits: 3 }, category: { prefix: 'CAT-', digits: 2 } };
           if (db.pinSalt === undefined) db.pinSalt = "";
           db.security = { ...DB_DEFAULT.security, ...(db.security || {}) };
 
@@ -5216,7 +5265,8 @@
 
       window.saveCategory = function() {
         if (!guardOnce('saveCategory')) return;
-        const id = document.getElementById('edit-cat-id').value || 'CAT-' + generateID();
+        const catCfg = db.codeConfig.category;
+        const id = document.getElementById('edit-cat-id').value || (catCfg.prefix + String(db.counters.category++).padStart(catCfg.digits, '0'));
         const name = document.getElementById('cat-name').value.trim();
         const icon = document.getElementById('cat-icon').value.trim();
         const color = document.getElementById('cat-color').value;
@@ -5306,7 +5356,8 @@
 
       window.saveCustomer = function() {
         if (!guardOnce('saveCustomer')) return;
-        const id = document.getElementById('edit-c-id').value || 'C' + generateID();
+        const cfg = db.codeConfig.customer;
+        const id = document.getElementById('edit-c-id').value || (cfg.prefix + String(db.counters.customer++).padStart(cfg.digits, '0'));
         const name = document.getElementById('c-name').value.trim();
         const phone = document.getElementById('c-phone').value.trim();
         if(!name) return showAlert("ข้อมูลไม่ครบ", "ชื่อลูกค้าต้องไม่เป็นค่าว่าง", true);
@@ -6641,7 +6692,8 @@
         if (!name) return showAlert('ข้อมูลไม่ครบ', 'กรุณาระบุชื่อซัพพลายเออร์', true);
 
         const isNew = !id;
-        const finalId = id || ('S' + String(Object.keys(db.suppliers || {}).length + 1).padStart(3, '0') + '-' + generateID());
+        const cfg = db.codeConfig.supplier;
+        const finalId = id || (cfg.prefix + String(db.counters.supplier++).padStart(cfg.digits, '0'));
         db.suppliers[finalId] = { id: finalId, name, taxId, terms };
         persist();
         logTransaction(isNew ? 'SUPPLIER_CREATE' : 'SUPPLIER_EDIT', { supplierId: finalId, name });
@@ -7268,11 +7320,11 @@
                 // category literally named "TagA, TagB").
                 let resolvedCategoryNames = [];
                 if (item.category) {
+                  const catCfg = db.codeConfig.category;
                   resolvedCategoryNames = item.category.split(',').map(c => c.trim()).filter(Boolean).map(rawCat => {
                     const existingCat = db.categories.find(c => c.name.toLowerCase() === rawCat.toLowerCase());
                     if (existingCat) return existingCat.name;
-                    db.counters.category++;
-                    const newCat = { id: 'CAT-' + String(db.counters.category).padStart(2, '0'), name: rawCat, icon: '📦', color: '#6366f1' };
+                    const newCat = { id: catCfg.prefix + String(db.counters.category++).padStart(catCfg.digits, '0'), name: rawCat, icon: '📦', color: '#6366f1', parentId: null };
                     db.categories.push(newCat);
                     return newCat.name;
                   });
@@ -8748,6 +8800,43 @@ window.loadSupabaseConfigIntoForm = function () {
   const keyEl = document.getElementById('supabase-config-key');
   if (urlEl) urlEl.value = getConfiguredSupabaseUrl();
   if (keyEl) keyEl.value = getConfiguredSupabaseAnonKey();
+};
+
+window.loadCodeConfigIntoForm = function () {
+  ['customer', 'supplier', 'category'].forEach(type => {
+    const cfg = db.codeConfig[type];
+    document.getElementById(`codecfg-${type}-prefix`).value = cfg.prefix;
+    document.getElementById(`codecfg-${type}-digits`).value = cfg.digits;
+    document.getElementById(`codecfg-${type}-next`).value = db.counters[type];
+  });
+  window.updateCodeConfigPreview();
+  ['customer', 'supplier', 'category'].forEach(type => {
+    ['prefix', 'digits', 'next'].forEach(field => {
+      document.getElementById(`codecfg-${type}-${field}`).oninput = window.updateCodeConfigPreview;
+    });
+  });
+};
+
+window.updateCodeConfigPreview = function () {
+  const examples = ['customer', 'supplier', 'category'].map(type => {
+    const prefix = document.getElementById(`codecfg-${type}-prefix`).value || '';
+    const digits = parseInt(document.getElementById(`codecfg-${type}-digits`).value) || 1;
+    const next = parseInt(document.getElementById(`codecfg-${type}-next`).value) || 1;
+    return prefix + String(next).padStart(digits, '0');
+  });
+  document.getElementById('codecfg-preview').innerText = `ลูกค้า: ${examples[0]}  •  ซัพพลายเออร์: ${examples[1]}  •  หมวดหมู่: ${examples[2]}`;
+};
+
+window.saveCodeConfig = function () {
+  ['customer', 'supplier', 'category'].forEach(type => {
+    const prefix = document.getElementById(`codecfg-${type}-prefix`).value.trim();
+    const digits = Math.max(1, parseInt(document.getElementById(`codecfg-${type}-digits`).value) || 1);
+    const next = Math.max(1, parseInt(document.getElementById(`codecfg-${type}-next`).value) || 1);
+    db.codeConfig[type] = { prefix, digits };
+    db.counters[type] = next;
+  });
+  persist();
+  showToast('บันทึกรูปแบบรหัสอัตโนมัติเรียบร้อย');
 };
 
 let _supabaseClient = null;
