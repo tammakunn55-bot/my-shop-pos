@@ -4291,7 +4291,13 @@
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs text-slate-800">
               <div class="col-span-2 sm:col-span-1"><label class="block text-slate-500 mb-1">ชื่อตัวเลือก</label><input type="text" class="v-size w-full border p-2 rounded" value="${escapeHTML(sizeName)}"></div>
-              <div class="col-span-2 sm:col-span-1"><label class="block text-slate-500 mb-1">บาร์โค้ด</label><input type="text" class="v-barcode w-full border p-2 rounded font-mono" value="${escapeHTML(barcode)}"></div>
+              <div class="col-span-2 sm:col-span-1">
+                <label class="block text-slate-500 mb-1">บาร์โค้ด</label>
+                <div class="flex gap-1">
+                  <input type="text" class="v-barcode w-full border p-2 rounded font-mono" value="${escapeHTML(barcode)}">
+                  <button type="button" onclick="const el=this.closest('.variant-row').querySelector('.v-barcode'); window.startCameraScan(null, (code)=>{ el.value=code; })" title="สแกนบาร์โค้ด" class="flex-none px-2 bg-indigo-50 border border-indigo-200 rounded text-indigo-600 btn-touch">📷</button>
+                </div>
+              </div>
               <div><label class="block text-slate-500 mb-1">ทุน</label><input type="number" class="v-cost w-full border p-2 rounded" value="${cost}"></div>
               <div><label class="block text-slate-500 mb-1">ราคาขาย</label><input type="number" class="v-price w-full border p-2 rounded font-bold text-indigo-600" value="${price}"></div>
               <div><label class="block text-slate-500 mb-1">สต็อก</label><input type="number" class="v-stock w-full border p-2 rounded" value="${stock}"></div>
@@ -4950,7 +4956,11 @@
         // Filter row (per-column quick filters, google-sheet style)
         let filterRow = '<tr class="bg-white border-t normal-case font-normal">' + allCols.map(c => {
           if (c.filter === 'text') {
-            return `<th class="p-1.5"><input type="text" data-filter-key="${c.key}" value="${escapeHTML(stockFilters[c.key] || '')}" onkeyup="window.__setStockFilter('${c.key}', this.value)" placeholder="กรอง..." class="w-full text-[10px] font-normal border rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-400"></th>`;
+            const inputHtml = `<input type="text" id="stock-filter-input-${c.key}" data-filter-key="${c.key}" value="${escapeHTML(stockFilters[c.key] || '')}" onkeyup="window.__setStockFilter('${c.key}', this.value)" placeholder="กรอง..." class="w-full text-[10px] font-normal border rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-400">`;
+            if (c.key === 'barcode') {
+              return `<th class="p-1.5"><div class="flex gap-1">${inputHtml}<button onclick="window.startCameraScan('stock-filter-input-barcode')" title="สแกนหาสินค้าด้วยบาร์โค้ด" class="flex-none px-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-600 btn-touch">📷</button></div></th>`;
+            }
+            return `<th class="p-1.5">${inputHtml}</th>`;
           }
           return '<th class="p-1.5"></th>';
         }).join('') + '</tr>';
@@ -6730,10 +6740,13 @@
       // ==========================================
       // CAMERA SCANNER (WITH HTTPS PRE-FLIGHT CHECK)
       // ==========================================
-      window.startCameraScan = function() {
+      window.startCameraScan = function(targetInputId, onScanned) {
         if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
           return showAlert("ความปลอดภัยของเบราว์เซอร์", "ระบบกล้องสแกนบาร์โค้ดต้องการการเชื่อมต่อแบบปลอดภัย (HTTPS) เพื่ออนุญาตสิทธิ์การเข้าถึงกล้องถ่ายภาพ กรุณารันแอปพลิเคชันบนเซิร์ฟเวอร์ที่มี SSL ติดตั้ง", true);
         }
+
+        window.__scanTargetInputId = targetInputId || 'search-product';
+        window.__scanOnScanned = typeof onScanned === 'function' ? onScanned : null;
 
         document.getElementById('modal-camera').classList.remove('hidden');
         document.getElementById('modal-camera').classList.add('flex');
@@ -6750,8 +6763,16 @@
           (decodedText) => {
             playSound('success');
             window.stopCameraScan();
-            document.getElementById('search-product').value = decodedText;
-            window.onSearchInput({target: {value: decodedText}});
+            const targetId = window.__scanTargetInputId || 'search-product';
+            const targetEl = document.getElementById(targetId);
+            if (targetEl) {
+              targetEl.value = decodedText;
+              targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+              targetEl.dispatchEvent(new Event('keyup', { bubbles: true }));
+              targetEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (window.__scanOnScanned) window.__scanOnScanned(decodedText);
+            else if (targetId === 'search-product') window.onSearchInput({target: {value: decodedText}});
           }
         ).catch(err => {
           console.warn("Camera start err:", err);
