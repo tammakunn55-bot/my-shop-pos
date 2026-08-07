@@ -13,6 +13,7 @@
         input, select { width: 100%; padding: 12px; margin: 8px 0 18px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; }
         button { width: 100%; padding: 12px; background: #0070f3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
         .btn-link { background: none; color: #0070f3; border: none; padding: 0; text-decoration: underline; cursor: pointer; font-weight: normal; margin-top: 10px; }
+        .muted { color: #666; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -27,6 +28,7 @@
         <input type="password" id="login-pin" pattern="[0-9]*" inputmode="numeric" placeholder="รหัส PIN 4-6 หลัก">
         
         <button onclick="checkLogin()">ปลดล็อกระบบ</button>
+        <p class="muted">หมายเหตุ: คีย์ Supabase จะถูกเก็บแบบเข้ารหัสในเครื่อง (AES‑GCM) ด้วย PIN ของคุณ</p>
         <center><button class="btn-link" onclick="showRegister()">➕ ลงทะเบียนผู้ใช้ใหม่ / เพิ่มร้านค้า</button></center>
     </div>
 
@@ -58,28 +60,99 @@
     </div>
 
     <script>
-        // ดึงรายชื่อบัญชีทั้งหมดจากเครื่อง หากไม่มีให้เริ่มจากอาเรย์ว่าง
+        // --- Utilities: base64 & buffer helpers ---
+        const toBase64 = (buffer) => {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary);
+        };
+        const fromBase64 = (b64) => {
+            const binary = atob(b64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes.buffer;
+        };
+
+        // --- Web Crypto helpers ---
+        async function generateSalt() {
+            const s = crypto.getRandomValues(new Uint8Array(16));
+            return toBase64(s);
+        }
+        function generateIV() {
+            return toBase64(crypto.getRandomValues(new Uint8Array(12)));
+        }
+
+        async function deriveKeyFromPin(pin, saltB64, iterations = 150000) {
+            const salt = new Uint8Array(fromBase64(saltB64));
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                enc.encode(pin),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveKey', 'deriveBits']
+            );
+
+            // derive AES-GCM key
+            const key = await crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: iterations,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                true, // extractable so we can export for a PIN-hash
+                ['encrypt', 'decrypt']
+            );
+            return { key, iterations };
+        }
+
+        async function exportKeyHash(key) {
+            // export raw bytes of the derived AES key as a PIN-verifier
+            const raw = await crypto.subtle.exportKey('raw', key);
+            return toBase64(raw);
+        }
+
+        async function encryptText(plainText, cryptoKey, ivB64) {
+            const iv = new Uint8Array(fromBase64(ivB64));
+            const enc = new TextEncoder();
+            const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, enc.encode(plainText));
+            return toBase64(ct);
+        }
+
+        async function decryptText(cipherB64, cryptoKey, ivB64) {
+            const iv = new Uint8Array(fromBase64(ivB64));
+            const ct = fromBase64(cipherB64);
+            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ct);
+            const dec = new TextDecoder();
+            return dec.decode(plainBuf);
+        }
+
+        // --- Local storage account helpers (encrypted storage schema) ---
         function getAccounts() {
             const data = localStorage.getItem('local_accounts');
             return data ? JSON.parse(data) : [];
         }
+        function saveAccounts(accounts) {
+            localStorage.setItem('local_accounts', JSON.stringify(accounts));
+        }
 
-        // ฟังก์ชันจัดการหน้าจอ ล็อกอิน
+        // --- UI navigation ---
         function showLogin() {
             document.getElementById('login-screen').classList.remove('hidden');
             document.getElementById('register-screen').classList.add('hidden');
             document.getElementById('main-app').classList.add('hidden');
-            
-            // อัปเดตรายชื่อในเมนู Dropdown
+
             const accounts = getAccounts();
             const select = document.getElementById('login-user-select');
             select.innerHTML = '';
 
-            if (accounts.length === 0) {
-                // ถ้าไม่มีบัญชีเลยในเครื่อง ให้ข้ามไปหน้าสมัครสมาชิกทันที
-                showRegister();
-                return;
-            }
+            if (accounts.length === 0) { showRegister(); return; }
 
             accounts.forEach(acc => {
                 const opt = document.createElement('option');
@@ -89,72 +162,86 @@
             });
             document.getElementById('login-pin').value = '';
         }
-
-        // ฟังก์ชันจัดการหน้าจอ ลงทะเบียน
         function showRegister() {
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('register-screen').classList.remove('hidden');
             document.getElementById('main-app').classList.add('hidden');
         }
 
-        // ฟังก์ชันบันทึกบัญชีใหม่ลง LocalStorage
-        function saveNewAccount() {
+        // --- Registration: encrypt Supabase key with PIN-derived key, store salt/iv/ciphertext and pin verifier ---
+        async function saveNewAccount() {
             const username = document.getElementById('reg-username').value.trim();
             const pin = document.getElementById('reg-pin').value.trim();
             const url = document.getElementById('reg-url').value.trim();
             const key = document.getElementById('reg-key').value.trim();
 
             if (!username || !pin || !url || !key) return alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
-            if (isNaN(pin)) return alert('รหัส PIN ต้องเป็นตัวเลขเท่านั้น');
+            if (!/^[0-9]{4,}$/.test(pin)) return alert('รหัส PIN ต้องเป็นตัวเลขอย่างน้อย 4 หลัก');
 
             const accounts = getAccounts();
-            
-            // ตรวจสอบชื่อซํ้า
             if (accounts.some(acc => acc.username.toLowerCase() === username.toLowerCase())) {
                 return alert('ชื่อผู้ใช้หรือชื่อร้านค้านี้มีอยู่ในเครื่องแล้ว');
             }
 
-            // เพิ่มบัญชีใหม่เข้าไปในรายชื่อ
-            accounts.push({ username, pin, sb_url: url, sb_key: key });
-            localStorage.setItem('local_accounts', JSON.stringify(accounts));
-            
-            alert('สร้างบัญชีและบันทึกคีย์สำเร็จ!');
-            // รีเซ็ตล้างค่าในฟอร์มสมัคร
-            document.getElementById('reg-username').value = '';
-            document.getElementById('reg-pin').value = '';
-            document.getElementById('reg-url').value = '';
-            document.getElementById('reg-key').value = '';
-            
-            showLogin();
-        }
+            try {
+                const salt = await generateSalt();
+                const iv = generateIV();
+                const { key: derivedKey, iterations } = await deriveKeyFromPin(pin, salt);
+                const pinVerifier = await exportKeyHash(derivedKey); // store as verifier instead of raw PIN
+                const cipher = await encryptText(key, derivedKey, iv);
 
-        // ฟังก์ชันตรวจสอบ PIN เพื่อเข้าใช้งาน
-        function checkLogin() {
-            const selectedUser = document.getElementById('login-user-select').value;
-            const inputPin = document.getElementById('login-pin').value;
-            
-            const accounts = getAccounts();
-            // ค้นหาบัญชีที่เลือก
-            const currentAccount = accounts.find(acc => acc.username === selectedUser);
+                accounts.push({ username, sb_url: url, sb_key_enc: cipher, sb_key_iv: iv, sb_key_salt: salt, pin_verifier: pinVerifier, kdf_iterations: iterations });
+                saveAccounts(accounts);
 
-            if (currentAccount && currentAccount.pin === inputPin) {
-                // รหัสผ่านถูกต้อง เข้าสู่หน้าจอหลัก
-                document.getElementById('login-screen').classList.add('hidden');
-                document.getElementById('main-app').classList.remove('hidden');
-                document.getElementById('app-title').textContent = `🏪 ร้าน: ${currentAccount.username}`;
-                
-                // เริ่มทำการเชื่อมต่อข้อมูลไปยัง Supabase ของบุคคลนั้น
-                connectToSupabase(currentAccount.sb_url, currentAccount.sb_key);
-            } else {
-                alert('รหัส PIN ไม่ถูกต้อง ลองใหม่อีกครั้ง');
+                alert('สร้างบัญชีและบันทึกคีย์แบบเข้ารหัสสำเร็จ!');
+                document.getElementById('reg-username').value = '';
+                document.getElementById('reg-pin').value = '';
+                document.getElementById('reg-url').value = '';
+                document.getElementById('reg-key').value = '';
+                showLogin();
+            } catch (err) {
+                console.error(err);
+                alert('เกิดข้อผิดพลาดระหว่างการสร้างบัญชี');
             }
         }
 
-        // ฟังก์ชันเชื่อมต่อไปยัง Supabase ส่วนบุคคล
+        // --- Login: derive key from PIN and decrypt stored sb_key; verify pin by comparing derived key export ---
+        async function checkLogin() {
+            const selectedUser = document.getElementById('login-user-select').value;
+            const inputPin = document.getElementById('login-pin').value;
+            const accounts = getAccounts();
+            const currentAccount = accounts.find(acc => acc.username === selectedUser);
+
+            if (!currentAccount) return alert('ไม่พบบัญชีที่เลือก');
+            if (!inputPin) return alert('กรุณากรอก PIN');
+
+            try {
+                const { key: derivedKey } = await deriveKeyFromPin(inputPin, currentAccount.sb_key_salt, currentAccount.kdf_iterations || 150000);
+                const derivedVerifier = await exportKeyHash(derivedKey);
+                if (derivedVerifier !== currentAccount.pin_verifier) {
+                    return alert('รหัส PIN ไม่ถูกต้อง ลองใหม่อีกครั้ง');
+                }
+
+                // PIN OK — decrypt key
+                const sbKey = await decryptText(currentAccount.sb_key_enc, derivedKey, currentAccount.sb_key_iv);
+
+                // proceed to main app
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                document.getElementById('app-title').textContent = `🏪 ร้าน: ${currentAccount.username}`;
+
+                // connect to supabase and fetch products
+                connectToSupabase(currentAccount.sb_url, sbKey);
+            } catch (err) {
+                console.error(err);
+                alert('ไม่สามารถถอดรหัสคีย์ได้ — อาจเกิดจาก PIN ผิดหรือข้อมูลในเครื่องเสียหาย');
+            }
+        }
+
+        // --- Supabase connection (unchanged behavior) ---
         async function connectToSupabase(url, key) {
             document.getElementById('product-list').innerHTML = '🔄 กำลังดึงข้อมูลสินค้าของคุณ...';
             try {
-                // ใช้ UMD global ที่มาในสคริปต์ supabase.min.js
                 const supabaseClient = window.supabase.createClient(url, key);
                 const { data, error } = await supabaseClient.from('products').select('*');
 
@@ -176,11 +263,9 @@
             }
         }
 
-        function logout() {
-            showLogin();
-        }
+        function logout() { showLogin(); }
 
-        // สั่งให้เช็กระบบทันทีเมื่อเข้าหน้าเว็บครั้งแรก
+        // init
         showLogin();
     </script>
 </body>
