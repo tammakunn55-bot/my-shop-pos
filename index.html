@@ -367,11 +367,6 @@
                 <span>⚠️ ต่ำกว่าเกณฑ์</span>
               </label>
 
-              <label class="flex items-center space-x-1 text-xs font-bold text-amber-600 cursor-pointer bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-100 flex-none">
-                <input type="checkbox" id="stock-suspicious-name-filter" onchange="window.renderStock()" class="w-4 h-4 text-amber-600 rounded">
-                <span>🔎 ชื่อน่าสงสัย</span>
-              </label>
-
               <select id="stock-category-filter" onchange="window.renderStock()" class="bg-white border border-slate-300 text-xs rounded-xl px-2 py-1.5 outline-none font-bold text-slate-700 max-w-[100px]"></select>
               
               <select id="stock-sort-select" onchange="window.stockSortBy = this.value; window.renderStock()" class="bg-white border border-slate-300 text-xs rounded-xl px-2 py-1.5 outline-none font-bold text-slate-700">
@@ -400,7 +395,7 @@
 
           <div class="overflow-x-auto">
             <table class="w-full text-left whitespace-nowrap min-w-[500px]">
-              <thead class="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b sticky top-20 z-20 shadow-sm" id="stock-table-head"></thead>
+              <thead class="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b" id="stock-table-head"></thead>
               <tbody id="stock-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
             </table>
           </div>
@@ -1826,6 +1821,60 @@
     </script>
 
     <script>
+    /* ==========================================
+       SWIPE GESTURES — ปัดจอเพื่อสะดวกขึ้น
+       หน้าขาย: ปัดซ้าย/ขวา = เปลี่ยนหมวดหมู่ถัดไป/ก่อนหน้า
+       หน้าคลัง: ปัดซ้าย/ขวา = หน้าถัดไป/ก่อนหน้าของตาราง
+       ========================================== */
+    function attachSwipeGesture(elementId, onSwipeLeft, onSwipeRight) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      let startX = 0, startY = 0, startTime = 0;
+      const MIN_DISTANCE = 60;   // ต้องปัดอย่างน้อยกี่พิกเซลถึงจะนับ กันการปัดมือสั่น/สครอลผิด
+      const MAX_OFF_AXIS = 60;   // ปัดแนวตั้งเกินนี้ = ถือว่ากำลังสครอลหน้าจอ ไม่ใช่ปัดเปลี่ยนหน้า
+      const MAX_DURATION = 600;  // ปัดช้าเกินนี้ = ถือว่าไม่ใช่ swipe (อาจแค่ลากนิ้วเฉยๆ)
+
+      el.addEventListener('touchstart', (e) => {
+        const t = e.changedTouches[0];
+        startX = t.screenX; startY = t.screenY; startTime = Date.now();
+      }, { passive: true });
+
+      el.addEventListener('touchend', (e) => {
+        const t = e.changedTouches[0];
+        const dx = t.screenX - startX;
+        const dy = t.screenY - startY;
+        const dt = Date.now() - startTime;
+        if (dt > MAX_DURATION) return;
+        if (Math.abs(dy) > MAX_OFF_AXIS) return;
+        if (dx <= -MIN_DISTANCE) onSwipeLeft && onSwipeLeft();
+        else if (dx >= MIN_DISTANCE) onSwipeRight && onSwipeRight();
+      }, { passive: true });
+    }
+
+    window.swipeToAdjacentCategory = function (direction) {
+      const topLevel = db.categories.filter(c => !c.parentId);
+      if (topLevel.length === 0) return;
+      const curIdx = topLevel.findIndex(c => c.name === activeCategory);
+      let nextIdx;
+      if (curIdx === -1) nextIdx = 0;
+      else nextIdx = (curIdx + direction + topLevel.length) % topLevel.length;
+      window.selectCategory(topLevel[nextIdx].name);
+      showToast(`📁 ${topLevel[nextIdx].name}`);
+    };
+
+    window.swipeStockPage = function (direction) {
+      const target = window.stockCurrentPage + direction;
+      if (target < 1) return;
+      window.changeStockPage(target);
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      attachSwipeGesture('product-selection', () => window.swipeToAdjacentCategory(1), () => window.swipeToAdjacentCategory(-1));
+      attachSwipeGesture('view-stock', () => window.swipeStockPage(1), () => window.swipeStockPage(-1));
+    });
+    </script>
+
+    <script>
 
     /* Bulk image import tool — uploads many product images to Supabase Storage in one go
        and attaches each to the matching product by name, instead of one-by-one manually. */
@@ -2361,6 +2410,21 @@
       window.playSound = function(type) {
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          if (type === 'sale') {
+            // เสียง 2 โน้ตไล่ระดับขึ้น ให้ความรู้สึก "ปิดการขายสำเร็จ" ชัดเจน แยกจากเสียงบี๊บเพิ่มสินค้าธรรมดา
+            [660, 990].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain); gain.connect(ctx.destination);
+              osc.type = 'sine';
+              const startAt = ctx.currentTime + i * 0.09;
+              osc.frequency.setValueAtTime(freq, startAt);
+              gain.gain.setValueAtTime(0.12, startAt);
+              gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.18);
+              osc.start(startAt); osc.stop(startAt + 0.2);
+            });
+            return;
+          }
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.connect(gain);
@@ -3828,6 +3892,7 @@
             modalReceipt.classList.add('flex');
           }
           showToast("บันทึกการขายสำเร็จ!");
+          playSound('sale');
         });
 
         return success;
@@ -4967,7 +5032,6 @@
         const search = document.getElementById('stock-search-input').value.toLowerCase();
         const catFilter = document.getElementById('stock-category-filter').value;
         const onlyLowStock = document.getElementById('stock-low-filter').checked;
-        const onlySuspiciousName = document.getElementById('stock-suspicious-name-filter').checked;
         const tbody = document.getElementById('stock-table-body');
         const head = document.getElementById('stock-table-head');
 
@@ -5038,18 +5102,13 @@
             const limit = v.minStock !== undefined ? v.minStock : 10;
             const isBelowMin = roundStock(v.stock) <= roundStock(limit);
             const isMatchLowStock = !onlyLowStock || isBelowMin;
-            // ชื่อ "น่าสงสัย" = สั้นเกินไป หรือเป็นแค่เบอร์/ขนาดล้วนๆ (เช่น "#0", "1/2\"", "80")
-            // แบบที่ระบบนำเข้าเว็บบางหน้าดึงมาผิด (เอาแค่ตัวเลือกย่อยมาเป็นชื่อสินค้าทั้งหมด)
-            const looksLikeBareSizeToken = /^#?\d+(-\d+)?(\.\d+)?(\/\d+)?\s*(["'”]|นิ้ว|มม\.?|ซม\.?|หุน|mm|cm)?$/i.test(p.name.trim());
-            const isSuspiciousName = p.name.trim().length < 4 || looksLikeBareSizeToken;
-            const isMatchSuspicious = !onlySuspiciousName || isSuspiciousName;
 
             const isMatchCode = !stockFilters.code || ((p.code || p.id).toLowerCase().includes(stockFilters.code.toLowerCase()));
             const isMatchBarcode = !stockFilters.barcode || (v.barcode || '').toLowerCase().includes(stockFilters.barcode.toLowerCase());
             const isMatchName = !stockFilters.name || p.name.toLowerCase().includes(stockFilters.name.toLowerCase());
             const isMatchSize = !stockFilters.size || (v.sizeName || '').toLowerCase().includes(stockFilters.size.toLowerCase());
 
-            if (isMatchSearch && isMatchCat && isMatchLowStock && isMatchSuspicious && isMatchCode && isMatchBarcode && isMatchName && isMatchSize) {
+            if (isMatchSearch && isMatchCat && isMatchLowStock && isMatchCode && isMatchBarcode && isMatchName && isMatchSize) {
               flt.push({ p, v, isBelowMin, limit, isFirstVariant: idx === 0 });
             }
           });
